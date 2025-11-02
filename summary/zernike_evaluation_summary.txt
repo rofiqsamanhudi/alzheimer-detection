@@ -1,0 +1,21 @@
+=== Evaluasi Fitur: zernike | Model: XGBoost (Validation) ===
+Akurasi: 80.34%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.78      0.78      0.78       453
+ Moderate Impairment       0.98      0.98      0.98       444
+       No Impairment       0.76      0.78      0.77       553
+Very Mild Impairment       0.72      0.69      0.71       503
+
+            accuracy                           0.80      1953
+           macro avg       0.81      0.81      0.81      1953
+        weighted avg       0.80      0.80      0.80      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   354                    6             37                    56
+Moderate Impairment                 2                  436              2                     4
+No Impairment                      46                    0            431                    76
+Very Mild Impairment               51                    5             99                   348

@@ -1,0 +1,21 @@
+=== Evaluasi Fitur: wavelet | Model: XGBoost (Validation) ===
+Akurasi: 76.70%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.93      0.70      0.80       453
+ Moderate Impairment       0.98      0.98      0.98       444
+       No Impairment       0.61      0.85      0.71       553
+Very Mild Impairment       0.69      0.55      0.62       503
+
+            accuracy                           0.77      1953
+           macro avg       0.80      0.77      0.78      1953
+        weighted avg       0.79      0.77      0.77      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   316                    3             83                    51
+Moderate Impairment                 1                  433              7                     3
+No Impairment                      10                    2            470                    71
+Very Mild Impairment               14                    5            205                   279

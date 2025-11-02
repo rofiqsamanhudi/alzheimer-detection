@@ -1,0 +1,194 @@
+=== ALL MODELS EVALUATION SUMMARY ===
+
+
+=== Evaluasi Fitur: fft | Model: XGBoost (Validation) ===
+Akurasi: 78.19%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.89      0.75      0.81       453
+ Moderate Impairment       1.00      0.99      0.99       444
+       No Impairment       0.65      0.83      0.73       553
+Very Mild Impairment       0.68      0.58      0.63       503
+
+            accuracy                           0.78      1953
+           macro avg       0.81      0.79      0.79      1953
+        weighted avg       0.79      0.78      0.78      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   338                    2             63                    50
+Moderate Impairment                 0                  438              2                     4
+No Impairment                      10                    0            460                    83
+Very Mild Impairment               30                    0            182                   291
+
+--------------------------------------------------------------------------------
+
+=== Evaluasi Fitur: gist | Model: XGBoost (Validation) ===
+Akurasi: 92.93%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.98      0.91      0.94       453
+ Moderate Impairment       1.00      1.00      1.00       444
+       No Impairment       0.87      0.95      0.91       553
+Very Mild Impairment       0.90      0.86      0.88       503
+
+            accuracy                           0.93      1953
+           macro avg       0.94      0.93      0.93      1953
+        weighted avg       0.93      0.93      0.93      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   412                    0             17                    24
+Moderate Impairment                 0                  444              0                     0
+No Impairment                       5                    0            524                    24
+Very Mild Impairment                4                    0             64                   435
+
+--------------------------------------------------------------------------------
+
+=== Evaluasi Fitur: glcm | Model: XGBoost (Validation) ===
+Akurasi: 86.38%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.95      0.83      0.88       453
+ Moderate Impairment       1.00      0.97      0.99       444
+       No Impairment       0.78      0.88      0.83       553
+Very Mild Impairment       0.78      0.78      0.78       503
+
+            accuracy                           0.86      1953
+           macro avg       0.88      0.87      0.87      1953
+        weighted avg       0.87      0.86      0.87      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   375                    0             28                    50
+Moderate Impairment                 2                  432              8                     2
+No Impairment                       6                    0            488                    59
+Very Mild Impairment               13                    0             98                   392
+
+--------------------------------------------------------------------------------
+
+=== Evaluasi Fitur: hog | Model: XGBoost (Validation) ===
+Akurasi: 88.79%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.98      0.84      0.91       453
+ Moderate Impairment       1.00      0.99      1.00       444
+       No Impairment       0.79      0.93      0.85       553
+Very Mild Impairment       0.84      0.79      0.82       503
+
+            accuracy                           0.89      1953
+           macro avg       0.90      0.89      0.89      1953
+        weighted avg       0.90      0.89      0.89      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   381                    0             38                    34
+Moderate Impairment                 1                  440              0                     3
+No Impairment                       1                    0            514                    38
+Very Mild Impairment                4                    0            100                   399
+
+--------------------------------------------------------------------------------
+
+=== Evaluasi Fitur: hu | Model: XGBoost (Validation) ===
+Akurasi: 88.58%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.95      0.87      0.91       453
+ Moderate Impairment       1.00      0.98      0.99       444
+       No Impairment       0.81      0.92      0.86       553
+Very Mild Impairment       0.83      0.78      0.80       503
+
+            accuracy                           0.89      1953
+           macro avg       0.90      0.89      0.89      1953
+        weighted avg       0.89      0.89      0.89      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   394                    0             19                    40
+Moderate Impairment                 3                  435              1                     5
+No Impairment                       6                    0            509                    38
+Very Mild Impairment               10                    0            101                   392
+
+--------------------------------------------------------------------------------
+
+=== Evaluasi Fitur: lbp | Model: XGBoost (Validation) ===
+Akurasi: 68.97%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.83      0.65      0.73       453
+ Moderate Impairment       0.97      0.96      0.97       444
+       No Impairment       0.55      0.73      0.63       553
+Very Mild Impairment       0.52      0.45      0.48       503
+
+            accuracy                           0.69      1953
+           macro avg       0.72      0.70      0.70      1953
+        weighted avg       0.70      0.69      0.69      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   294                    5             85                    69
+Moderate Impairment                 0                  426              8                    10
+No Impairment                      16                    4            403                   130
+Very Mild Impairment               46                    2            231                   224
+
+--------------------------------------------------------------------------------
+
+=== Evaluasi Fitur: wavelet | Model: XGBoost (Validation) ===
+Akurasi: 76.70%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.93      0.70      0.80       453
+ Moderate Impairment       0.98      0.98      0.98       444
+       No Impairment       0.61      0.85      0.71       553
+Very Mild Impairment       0.69      0.55      0.62       503
+
+            accuracy                           0.77      1953
+           macro avg       0.80      0.77      0.78      1953
+        weighted avg       0.79      0.77      0.77      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   316                    3             83                    51
+Moderate Impairment                 1                  433              7                     3
+No Impairment                      10                    2            470                    71
+Very Mild Impairment               14                    5            205                   279
+
+--------------------------------------------------------------------------------
+
+=== Evaluasi Fitur: zernike | Model: XGBoost (Validation) ===
+Akurasi: 80.34%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.78      0.78      0.78       453
+ Moderate Impairment       0.98      0.98      0.98       444
+       No Impairment       0.76      0.78      0.77       553
+Very Mild Impairment       0.72      0.69      0.71       503
+
+            accuracy                           0.80      1953
+           macro avg       0.81      0.81      0.81      1953
+        weighted avg       0.80      0.80      0.80      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   354                    6             37                    56
+Moderate Impairment                 2                  436              2                     4
+No Impairment                      46                    0            431                    76
+Very Mild Impairment               51                    5             99                   348
+
+--------------------------------------------------------------------------------

@@ -1,0 +1,21 @@
+=== Evaluasi Fitur: fft | Model: XGBoost (Validation) ===
+Akurasi: 78.19%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.89      0.75      0.81       453
+ Moderate Impairment       1.00      0.99      0.99       444
+       No Impairment       0.65      0.83      0.73       553
+Very Mild Impairment       0.68      0.58      0.63       503
+
+            accuracy                           0.78      1953
+           macro avg       0.81      0.79      0.79      1953
+        weighted avg       0.79      0.78      0.78      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   338                    2             63                    50
+Moderate Impairment                 0                  438              2                     4
+No Impairment                      10                    0            460                    83
+Very Mild Impairment               30                    0            182                   291

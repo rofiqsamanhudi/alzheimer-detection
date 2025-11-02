@@ -1,0 +1,21 @@
+=== Evaluasi Fitur: glcm | Model: XGBoost (Validation) ===
+Akurasi: 86.38%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.95      0.83      0.88       453
+ Moderate Impairment       1.00      0.97      0.99       444
+       No Impairment       0.78      0.88      0.83       553
+Very Mild Impairment       0.78      0.78      0.78       503
+
+            accuracy                           0.86      1953
+           macro avg       0.88      0.87      0.87      1953
+        weighted avg       0.87      0.86      0.87      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   375                    0             28                    50
+Moderate Impairment                 2                  432              8                     2
+No Impairment                       6                    0            488                    59
+Very Mild Impairment               13                    0             98                   392

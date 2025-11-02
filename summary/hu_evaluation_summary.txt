@@ -1,0 +1,21 @@
+=== Evaluasi Fitur: hu | Model: XGBoost (Validation) ===
+Akurasi: 88.58%
+
+Classification Report:
+                      precision    recall  f1-score   support
+
+     Mild Impairment       0.95      0.87      0.91       453
+ Moderate Impairment       1.00      0.98      0.99       444
+       No Impairment       0.81      0.92      0.86       553
+Very Mild Impairment       0.83      0.78      0.80       503
+
+            accuracy                           0.89      1953
+           macro avg       0.90      0.89      0.89      1953
+        weighted avg       0.89      0.89      0.89      1953
+
+Confusion Matrix:
+                      Mild Impairment  Moderate Impairment  No Impairment  Very Mild Impairment
+Mild Impairment                   394                    0             19                    40
+Moderate Impairment                 3                  435              1                     5
+No Impairment                       6                    0            509                    38
+Very Mild Impairment               10                    0            101                   392
