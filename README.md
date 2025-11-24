@@ -76,7 +76,7 @@ alzheimer-detection/
 ├── requirements.txt             # Dependencies Python
 ├── README.dataset.txt           # Informasi dataset
 ├── README.roboflow.txt          # Catatan penggunaan Roboflow
-├── LICENSE.md                   # Lisensi proyek
+├── LICENSE                      # Lisensi proyek
 └── README.md                    # Dokumentasi utama proyek
 ```
 
