@@ -45,7 +45,24 @@ git clone https://github.com/rofiqsamanhudi/alzheimer-detection.git
 cd alzheimer-detection
 ```
 
-### 2. Install Dependencies
+### 2. Buat virtual environment
+```bash
+python -m venv venv
+
+# Windows (CMD)
+venv\Scripts\activate
+
+# Windows (PowerShell)
+venv\Scripts\Activate.ps1
+
+# Jika terjadi error policy di PowerShell, jalankan:
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# macOS / Linux
+source venv/bin/activate
+```
+
+### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
