@@ -163,7 +163,7 @@ jupyter notebook alzheimer_detection.ipynb
 
 ---
 
-### 3️. Vision Transformers
+### 3️. Transformers
 
 | Model            | Baseline | Fine-Tuning Normal | LoRA Fine-Tuning |
 | :--------------: | :------: | :----------------: | :--------------: |
