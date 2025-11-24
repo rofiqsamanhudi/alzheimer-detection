@@ -59,7 +59,7 @@ pipreqs . --force
 
 ---
 
-## project structure
+## Project structure
 
 ```
 alzheimer-detection/
@@ -84,7 +84,7 @@ alzheimer-detection/
 
 
 ---
-## running the pipeline
+## Running the pipeline
 
 Semua tahapan dijalankan melalui notebook: `alzheimer_detection.ipynb`.
 
@@ -114,7 +114,7 @@ jupyter notebook alzheimer_detection.ipynb
 ```
 
 ---
-## Hasil Evaluasi (Evaluation Results)
+## Evaluation results
 
 ### 1️. Machine Learning Klasik (XGBoost)
 
