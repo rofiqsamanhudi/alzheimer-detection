@@ -119,11 +119,12 @@ Semua tahapan dijalankan melalui notebook: `alzheimer_detection.ipynb`.
 3. **Training Deep Learning**
    - Model CNN: CNN Scratch, ResNet50, EfficientNet
    - Model Transformer: Swin, EfficientFormer, ViT-B/16
-   - Latih dengan strategi: baseline, fine-tuning normal, atau LoRA
+   - Evaluasi model pada validation/test set
+   - Latih dengan strategi: baseline, fine-tuning normal, dan LoRA
 
 4. **Evaluasi**
    - Hitung Akurasi, Confusion Matrix, dan Classification Report
-   - Simpan hasil di `experiments/`
+   - Simpan hasil pada setiap folder model
 
 ### ❐ Jalankan Notebook
 ```bash
