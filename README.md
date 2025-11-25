@@ -109,23 +109,23 @@ Semua tahapan dijalankan melalui notebook: `alzheimer_detection.ipynb`.
 ### ❐ Tahapan Pipeline:
 
 1. **Preprocessing & Ekstraksi Fitur**
-   - Normalisasi dan resize citra
-   - Ekstraksi fitur klasik: FFT, GIST, GLCM, HOG, Hu, LBP, Wavelet, Zernike
+   - Normalisasi dan resize citra.
+   - Ekstraksi fitur klasik: FFT, GIST, GLCM, HOG, Hu, LBP, Wavelet, Zernike.
    - Simpan fitur di `processed_dataset/`
 
 2. **Training Machine Learning Klasik**
-   - Latih model XGBoost menggunakan fitur klasik
-   - Evaluasi model pada validation/test set
+   - Latih model XGBoost menggunakan fitur klasik.
+   - Evaluasi model pada validation/test set.
 
 3. **Training Deep Learning**
-   - Model CNN: CNN Scratch, ResNet50, EfficientNet
-   - Model Transformer: Swin, EfficientFormer, ViT-B/16
-   - Evaluasi model pada validation/test set
-   - Latih dengan strategi: baseline, fine-tuning normal, dan LoRA
+   - Model CNN: CNN Scratch, ResNet50, EfficientNet.
+   - Model Transformer: Swin, EfficientFormer, ViT-B/16.
+   - Evaluasi model pada validation/test set.
+   - Latih dengan strategi: baseline, fine-tuning normal, dan LoRA.
 
 4. **Evaluasi**
-   - Hitung Akurasi, Confusion Matrix, dan Classification Report
-   - Simpan hasil pada setiap folder model
+   - Hitung Akurasi, Confusion Matrix, dan Classification Report.
+   - Simpan hasil pada setiap folder model.
 
 ### ❐ Jalankan Notebook
 ```bash
