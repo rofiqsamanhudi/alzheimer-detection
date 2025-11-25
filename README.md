@@ -91,7 +91,7 @@ alzheimer-detection/
 ├── ViT-B16_models/              # Model Vision Transformer B/16
 ├── alzheimer_detection.ipynb    # Notebook utama dan eksperimen
 ├── Akademik poster              # Poster akademik
-├── Alzheimer-detection          # Laporan Hasil Percobaan
+├── Alzheimer-Detection.pdf      # Laporan Hasil Percobaan
 ├── requirements.txt             # Dependencies Python
 ├── README.dataset.txt           # Informasi dataset
 ├── README.roboflow.txt          # Catatan penggunaan Roboflow
