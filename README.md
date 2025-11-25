@@ -90,6 +90,7 @@ alzheimer-detection/
 ├── Swin_Transformer/            # Model Swin Transformer
 ├── ViT-B16_models/              # Model Vision Transformer B/16
 ├── alzheimer_detection.ipynb    # Notebook utama dan eksperimen
+├── Akademik poster              # Poster akademik
 ├── requirements.txt             # Dependencies Python
 ├── README.dataset.txt           # Informasi dataset
 ├── README.roboflow.txt          # Catatan penggunaan Roboflow
