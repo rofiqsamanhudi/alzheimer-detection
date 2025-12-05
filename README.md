@@ -178,9 +178,9 @@ jupyter notebook alzheimer_detection.ipynb
 ---
 
 **Catatan Umum:**  
-- Fitur klasik unggul pada dataset kecil dan sederhana karena ekstraksi fitur manual sudah cukup menangkap pola utama.  
-- CNN lebih baik untuk menangkap pola lokal yang kompleks dalam citra medis.  
-- Transformers unggul pada hubungan spasial global dan fitur kompleks, sehingga akurasi tertinggi dicapai di kategori ini.
+   Secara keseluruhan, hasil eksperimen menunjukkan bahwa setiap pendekatan memiliki karakteristik dan keunggulan yang berbeda. Metode berbasis fitur klasik cenderung memberikan performa yang baik pada dataset berukuran relatif kecil, karena proses ekstraksi fitur manual sudah mampu menangkap pola visual dasar. Sementara itu, arsitektur CNN menunjukkan kemampuan yang lebih baik dalam mempelajari pola lokal dan karakteristik tekstur yang lebih kompleks pada citra medis.
+
+   Pendekatan berbasis Transformer memberikan hasil tertinggi karena mekanismenya yang mampu memodelkan hubungan spasial global antar patch citra secara lebih efektif. Selain itu, eksperimen juga menegaskan pentingnya melakukan perbandingan yang komprehensif antar berbagai pendekatan, meliputi metode klasik, deep learning konvensional, transfer learning, serta teknik fine-tuning berbasis LoRA. Perbandingan ini diperlukan untuk mengevaluasi tidak hanya performa akurasi, tetapi juga efisiensi komputasi, kebutuhan data, dan tingkat generalisasi masing-masing metode.
 
 ---
 
