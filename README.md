@@ -64,7 +64,7 @@ Menggunakan model dari `torchvision` dan `timm` library + LoRA via `loralib`.
 - Scheduler: CosineAnnealing + warmup  
 
 ### Dataset
-Dataset terdiri dari citra MRI otak dari sumber seperti Kaggle (e.g., Alzheimer's Dataset) atau ADNI, dengan total sekitar 7,811 sampel. Distribusi kelas (4-class) sebagai berikut (berdasarkan contoh di notebook):
+Dataset terdiri dari citra MRI otak dari sumber Roboflow, dengan total sekitar 9,766 sampel. Distribusi kelas (4-class) sebagai berikut:
 
 | Kelas                  | Jumlah Sampel Aproksimasi | Class Weight (Balanced) |
 |------------------------|---------------------------|-------------------------|
@@ -74,7 +74,7 @@ Dataset terdiri dari citra MRI otak dari sumber seperti Kaggle (e.g., Alzheimer'
 | Moderate Impairment    | ~1,100                    | 1.101                   |
 
 - **Split:** 60% train (~4,687), 20% validation (~1,562), 20% test (~1,562) dengan stratifikasi.
-- **Sumber:** Download dari [Kaggle Alzheimer's Dataset](https://www.kaggle.com/datasets/tourist55/alzheimers-dataset-4-class-of-images) atau ADNI. Simpan di folder `dataset/` dengan sub-folder per kelas (e.g., `dataset/train/No Impairment/`).
+- **Sumber:** Download dari [Roboflow Alzheimer's Detetction Dataset]([https://www.kaggle.com/datasets/tourist55/alzheimers-dataset-4-class-of-images](https://universe.roboflow.com/alzheimer-h49wu/alzheimer-detection-ra7oh/dataset/1)). Simpan di folder `dataset/` dengan sub-folder per kelas (e.g., `dataset/train/No Impairment/`).
 - **Catatan:** Dataset mentah disimpan di `dataset/`, hasil preprocessing di `processed_dataset/`. Pastikan citra dalam format JPEG/PNG, grayscale atau RGB.
 
 ---
