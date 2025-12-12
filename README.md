@@ -1,5 +1,5 @@
 # Alzheimer Disease Detection from Brain MRI
-Sebuah pipeline end-to-end untuk mendeteksi penyakit Alzheimer dari citra otak, mengintegrasikan pendekatan **Machine Learning klasik**, **Convolutional Neural Networks (CNN)**, dan **Vision Transformers**. Pipeline ini membandingkan performa berbagai metode, termasuk **XGBoost dengan fitur klasik** (FFT, GIST, GLCM, HOG, Hu moments, LBP, Wavelet, Zernike), **model CNN** (CNN Scratch, Resnet50, EfficientNet), dan **model Transformer** (Swin Transformer, EfficientFormer, ViT B/16). Selain itu, pipeline mendukung eksperimen dengan strategi **fine-tuning** dan **LoRA (Low-Rank Adaptation)** untuk meningkatkan akurasi deteksi pada dataset citra medis Alzheimer.
+Pipeline End-to-End Deteksi Penyakit Alzheimer 4-Kelas menggunakan Machine Learning Klasik, CNN, dan Vision Transformers + Eksperimen Fine-tuning & LoRA
 
 ## Table of Contents
 - [Overview](#overview)
