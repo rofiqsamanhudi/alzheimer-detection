@@ -68,14 +68,14 @@ Dataset terdiri dari citra MRI otak dari sumber Roboflow, dengan total sekitar 9
 
 | Kelas                  | Jumlah Sampel Aproksimasi | Class Weight (Balanced) |
 |------------------------|---------------------------|-------------------------|
-| No Impairment (Non-Demented) | ~3,500                  | 0.882                   |
-| Very Mild Impairment   | ~2,000                    | 0.969                   |
-| Mild Impairment        | ~1,200                    | 1.079                   |
-| Moderate Impairment    | ~1,100                    | 1.101                   |
+| No Impairment (Non-Demented) | 2,767              | 28.33%                   |
+| Very Mild Impairment   | 2,518                    | 25.78%                   |
+| Mild Impairment        | 2,264                    | 23.18%                   |
+| Moderate Impairment    | 2,217                    | 22.70%                   |
 
-- **Split:** 60% train (~4,687), 20% validation (~1,562), 20% test (~1,562) dengan stratifikasi.
+- **Split:** 60% train (5,859), 20% validation (1,953), 20% test (1,954) dengan stratifikasi.
 - **Sumber:** Download dari [Roboflow Alzheimer's Detetction Dataset]([https://www.kaggle.com/datasets/tourist55/alzheimers-dataset-4-class-of-images](https://universe.roboflow.com/alzheimer-h49wu/alzheimer-detection-ra7oh/dataset/1)). Simpan di folder `dataset/` dengan sub-folder per kelas (e.g., `dataset/train/No Impairment/`).
-- **Catatan:** Dataset mentah disimpan di `dataset/`, hasil preprocessing di `processed_dataset/`. Pastikan citra dalam format JPEG/PNG, grayscale atau RGB.
+- **Catatan:** Dataset mentah disimpan di `dataset/`, hasil preprocessing di `processed_dataset/`.
 
 ---
 
@@ -87,17 +87,16 @@ git clone https://github.com/rofiqsamanhudi/alzheimer-detection.git
 cd alzheimer-detection
 ```
 
-### 2. Buat virtual environment
+### 2.  Buat & aktifkan virtual environment (sangat disarankan)
 ```bash
 python -m venv venv
 
-# Windows (CMD)
+# Windows Command Prompt
 venv\Scripts\activate
 
-# Windows (PowerShell)
+# Windows PowerShell
 venv\Scripts\Activate.ps1
-
-# Jika terjadi error policy di PowerShell, jalankan:
+# Jika muncul error policy:
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 # macOS / Linux
@@ -109,10 +108,10 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Jika `requirements.txt` masih kosong, Anda dapat membuatnya secara otomatis:
+requirements.txt sudah lengkap (PyTorch + CUDA, timm, peft, xgboost, scikit-image, mahotas, pywavelets, opencv, jupyter, dll).
+Jika tidak punya GPU, ubah baris torch di requirements.txt menjadi:
 ```bash
-pip install pipreqs
-pipreqs . --force
+torch==2.3.0+cpu torchvision==0.18.0+cpu torchaudio==2.3.0+cpu --index-url https://download.pytorch.org/whl/cpu
 ```
 
 
@@ -145,36 +144,30 @@ alzheimer-detection/
 
 
 ---
-## Running the pipeline
+## Running the Pipeline
 
-Semua tahapan dijalankan melalui notebook: `alzheimer_detection.ipynb`.
+Semua eksperimen sudah terintegrasi dalam satu notebook utama:  
+**`alzheimer_detection.ipynb`**
 
-### ❐ Tahapan Pipeline:
+### Pipeline Workflow (jalankan sel dari atas ke bawah)
 
-1. **Preprocessing & Ekstraksi Fitur**
-   - Normalisasi dan resize citra.
-   - Ekstraksi fitur klasik: FFT, GIST, GLCM, HOG, Hu, LBP, Wavelet, Zernike.
-   - Simpan fitur di `processed_dataset/`
+| Tahap                        | Deskripsi                                                                                 | Output Tersimpan di                  |
+|------------------------------|-------------------------------------------------------------------------------------------|--------------------------------------|
+| 1. Preprocessing & Ekstraksi Fitur | Resize, normalisasi, augmentasi + ekstraksi 8 fitur klasik (FFT, GIST, GLCM, HOG, Hu, LBP, Wavelet, Zernike) | `processed_dataset/`                 |
+| 2. Machine Learning Klasik   | Training XGBoost untuk setiap fitur secara terpisah                                       | `Fitur_Ekstraksi_Klasik/`            |
+| 3. Deep Learning (CNN)   | Training CNN Scratch, ResNet50, EfficientNetB0 (baseline, fine-tune, LoRA)                | `CNN_models/`, `ResNet_models/`, `EfficientNet_models/` |
+| 4. Deep Learning (Transformers) | Training Swin-T, EfficientFormer, ViT-B/16 (baseline, fine-tune, LoRA)                  | `Swin_Transformer/`, `EfficientFormer/`, `ViT-B16_models/` |
+| 5. Evaluasi & Visualisasi    | Accuracy, Precision, Recall, F1-Score, Confusion Matrix + grafik training history        | Setiap folder model + gambar PNG     |
 
-2. **Training Machine Learning Klasik**
-   - Latih model XGBoost menggunakan fitur klasik.
-   - Evaluasi model pada validation/test set.
+### Cara Menjalankan
 
-3. **Training Deep Learning**
-   - Model CNN: CNN Scratch, Resnet50, EfficientNet.
-   - Model Transformer: Swin, EfficientFormer, ViT-B/16.
-   - Evaluasi model pada validation/test set.
-   - Latih dengan strategi: baseline, fine-tuning normal, dan LoRA.
-
-4. **Evaluasi**
-   - Hitung Akurasi, Confusion Matrix, dan Classification Report.
-   - Simpan hasil pada setiap folder model.
-
-### ❐ Jalankan Notebook
 ```bash
+# Pastikan sudah di dalam virtual environment
 jupyter notebook alzheimer_detection.ipynb
 ```
-
+Setelah notebook terbuka:
+1. Klik Run -> Run All Cells (atau jalankan satu persatu untuk melihat prosesnya)
+2. Tunggu hingga selesai, semua model akan otomatis disimpan beserya log dan grafiknya
 ---
 ## Evaluation results
 
