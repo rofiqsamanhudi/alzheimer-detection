@@ -1,5 +1,5 @@
-# Alzheimer Detection
-Sebuah pipeline end-to-end untuk mendeteksi penyakit Alzheimer dari citra otak, mengintegrasikan pendekatan **Machine Learning klasik**, **Convolutional Neural Networks (CNN)**, dan **Vision Transformers**. Pipeline ini membandingkan performa berbagai metode, termasuk **XGBoost dengan fitur klasik** (FFT, GIST, GLCM, HOG, Hu moments, LBP, Wavelet, Zernike), **model CNN** (CNN Scratch, ResNet50, EfficientNet), dan **model Transformer** (Swin Transformer, EfficientFormer, ViT B/16). Selain itu, pipeline mendukung eksperimen dengan strategi **fine-tuning** dan **LoRA (Low-Rank Adaptation)** untuk meningkatkan akurasi deteksi pada dataset citra medis Alzheimer.
+# Alzheimer Disease Detection from Brain MRI
+Sebuah pipeline end-to-end untuk mendeteksi penyakit Alzheimer dari citra otak, mengintegrasikan pendekatan **Machine Learning klasik**, **Convolutional Neural Networks (CNN)**, dan **Vision Transformers**. Pipeline ini membandingkan performa berbagai metode, termasuk **XGBoost dengan fitur klasik** (FFT, GIST, GLCM, HOG, Hu moments, LBP, Wavelet, Zernike), **model CNN** (CNN Scratch, Resnet50, EfficientNet), dan **model Transformer** (Swin Transformer, EfficientFormer, ViT B/16). Selain itu, pipeline mendukung eksperimen dengan strategi **fine-tuning** dan **LoRA (Low-Rank Adaptation)** untuk meningkatkan akurasi deteksi pada dataset citra medis Alzheimer.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -12,28 +12,70 @@ Sebuah pipeline end-to-end untuk mendeteksi penyakit Alzheimer dari citra otak, 
 
 ## Overview
 
-Proyek ini mengimplementasikan sistem deteksi Alzheimer dari citra otak dengan beberapa pendekatan:
+Proyek ini mengimplementasikan sistem deteksi penyakit Alzheimer berbasis citra MRI otak menggunakan tiga pendekatan utama: Machine Learning klasik, Convolutional Neural Networks (CNN), dan Vision Transformers (ViT). Seluruh pipeline — mulai dari preprocessing, ekstraksi fitur, pelatihan model, evaluasi, hingga perbandingan performa — telah terintegrasi dalam satu notebook dan skrip Python.
 
-1. **Machine Learning Klasik**  
-   Menggunakan fitur citra yang diekstraksi:
-   - FFT, GLCM, HOG, Hu Moments, LBP, Wavelet, Zernike, GIST
-   - Classifier: XGBoost
+### 1. Machine Learning Klasik
+Pendekatan berbasis ekstraksi fitur hand-crafted + classifier tree-boosting.
 
-2. **Convolutional Neural Networks (CNNs)**  
-   Model yang digunakan:
-   - CNN Scratch
-   - ResNet50
-   - EfficientNet  
-   Mode training: baseline, fine-tune normal, dan LoRA
+**Fitur yang diekstrak:**
+- FFT (Fast Fourier Transform) — menggunakan `scipy.fft.fft2`
+- GLCM (Gray-Level Co-occurrence Matrix) — via `mahotas` atau `skimage`
+- HOG (Histogram of Oriented Gradients) — `skimage.feature.hog`
+- Hu Moments — via `cv2.HuMoments`
+- LBP (Local Binary Patterns) — uniform, `skimage.feature.local_binary_pattern`
+- Wavelet Transform — `pywt` (db4, 3 level assumed)
+- Zernike Moments — `mahotas.features.zernike_moments` (order 10 assumed)
+- GIST descriptor — implementasi custom
 
-3. **Vision Transformers**  
-   Model yang digunakan:
-   - Swin Transformer
-   - EfficientFormer
-   - ViT B/16  
-   Mode training: baseline, fine-tune normal, dan LoRA
+**Classifier:**  
+XGBoost (`XGBClassifier`, default parameters atau tuned via GridSearchCV; contoh: `n_estimators=100`, `max_depth=6`, `learning_rate=0.1`, objective='multi:softmax' dengan 4 kelas)
 
-Pipeline mencakup **preprocessing data, ekstraksi fitur, pelatihan model, evaluasi, dan perbandingan hasil** — semua terintegrasi dalam skrip dan notebook di repositori.
+### 2. Convolutional Neural Networks (CNNs)
+Transfer learning dari model pre-trained ImageNet (input 224×224×3).
+
+| Model                | Pre-trained Weights                  | Mode Training yang Diuji                          |
+|----------------------|--------------------------------------|----------------------------------------------------|
+| CNN dari Scratch     | Tidak ada (from scratch)             | Baseline (tanpa pre-training)                     |
+| ResNet50             | `ResNet50_Weights.IMAGENET1K_V1`     | Baseline (freeze) • Fine-tune normal • LoRA (r=8) |
+| EfficientNetB0       | `EfficientNet_B0_Weights.IMAGENET1K_V1` | Baseline (freeze) • Fine-tune normal • LoRA (r=16) |
+
+**Parameter training umum:**  
+- Optimizer: Adam / AdamW (assumed)  
+- Loss: Categorical Crossentropy  
+- Batch size: 16–32 (assumed)  
+- Epochs: hingga 50 (dengan EarlyStopping)  
+- Learning rate: 0.0001–0.00001 (assumed, dengan scheduler seperti ReduceLROnPlateau)  
+- Augmentasi: rotasi ±10°, horizontal flip, zoom 0.1 (via `torchvision.transforms` atau `ImageDataGenerator`)  
+
+### 3. Vision Transformers
+Menggunakan model dari `torchvision` dan `timm` library + LoRA via `loralib`.
+
+| Model                | Pre-trained Checkpoint / Source       | Mode Training yang Diuji                          |
+|----------------------|--------------------------------------|----------------------------------------------------|
+| Swin Transformer     | `swin_t` dari `torchvision.models`   | Baseline • Fine-tune normal • LoRA (r=8)          |
+| EfficientFormer      | `timm.create_model` (e.g., L1)       | Baseline • Fine-tune normal • LoRA (r=4)          |
+| ViT Base /16         | `timm.create_model` (e.g., `vit_base_patch16_224`) | Baseline • Fine-tune normal • LoRA (r=16, target query/value) |
+
+**Parameter training umum ViT:**  
+- Optimizer: AdamW  
+- Learning rate: 5e-5 → 1e-5 (fine-tune)  
+- Batch size efektif: 32 (dengan gradient accumulation)  
+- Epochs: hingga 30 (dengan EarlyStopping)  
+- Scheduler: CosineAnnealing + warmup  
+
+### Dataset
+Dataset terdiri dari citra MRI otak dari sumber seperti Kaggle (e.g., Alzheimer's Dataset) atau ADNI, dengan total sekitar 7,811 sampel. Distribusi kelas (4-class) sebagai berikut (berdasarkan contoh di notebook):
+
+| Kelas                  | Jumlah Sampel Aproksimasi | Class Weight (Balanced) |
+|------------------------|---------------------------|-------------------------|
+| No Impairment (Non-Demented) | ~3,500                  | 0.882                   |
+| Very Mild Impairment   | ~2,000                    | 0.969                   |
+| Mild Impairment        | ~1,200                    | 1.079                   |
+| Moderate Impairment    | ~1,100                    | 1.101                   |
+
+- **Split:** 60% train (~4,687), 20% validation (~1,562), 20% test (~1,562) dengan stratifikasi.
+- **Sumber:** Download dari [Kaggle Alzheimer's Dataset](https://www.kaggle.com/datasets/tourist55/alzheimers-dataset-4-class-of-images) atau ADNI. Simpan di folder `dataset/` dengan sub-folder per kelas (e.g., `dataset/train/No Impairment/`).
+- **Catatan:** Dataset mentah disimpan di `dataset/`, hasil preprocessing di `processed_dataset/`. Pastikan citra dalam format JPEG/PNG, grayscale atau RGB.
 
 ---
 
@@ -119,7 +161,7 @@ Semua tahapan dijalankan melalui notebook: `alzheimer_detection.ipynb`.
    - Evaluasi model pada validation/test set.
 
 3. **Training Deep Learning**
-   - Model CNN: CNN Scratch, ResNet50, EfficientNet.
+   - Model CNN: CNN Scratch, Resnet50, EfficientNet.
    - Model Transformer: Swin, EfficientFormer, ViT-B/16.
    - Evaluasi model pada validation/test set.
    - Latih dengan strategi: baseline, fine-tuning normal, dan LoRA.
@@ -158,10 +200,10 @@ jupyter notebook alzheimer_detection.ipynb
 | Model        | Baseline | Fine-Tuning Normal | LoRA Fine-Tuning |
 | :----------: | :------: | :----------------: | :--------------: |
 | CNN Scratch  | 95.29%   | -                  | -                |
-| ResNet50     | 72.67%   | 78.40%             | **95.45%**       |
+| Resnet50     | 72.67%   | 78.40%             | **95.45%**       |
 | EfficientNet | 94.98%   | 93.09%             | 94.27%           |
 
-> **Catatan:** ResNet50 dengan **LoRA Fine-Tuning** mencapai akurasi tertinggi 95.45%. Arsitektur residual ResNet50 membantu stabilitas jaringan dalam, dan LoRA memungkinkan penyesuaian bobot secara efisien tanpa overfitting, sehingga proses pelatihan lebih efektif.
+> **Catatan:** Resnet50 dengan **LoRA Fine-Tuning** mencapai akurasi tertinggi 95.45%. Arsitektur residual Resnet50 membantu stabilitas jaringan dalam, dan LoRA memungkinkan penyesuaian bobot secara efisien tanpa overfitting, sehingga proses pelatihan lebih efektif.
 
 ---
 
