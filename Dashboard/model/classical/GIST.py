@@ -1,5 +1,5 @@
 # ======================================================
-# GIST XGBoost Model Training & Saving
+# GIST XGBoost Model (Training + Save for Streamlit)
 # ======================================================
 
 import os
