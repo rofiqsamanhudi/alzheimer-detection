@@ -39,21 +39,46 @@ MODEL_PATHS = {
     "Swin Transformer (Full FT)": r"D:\alzheimer detection.v1i.folder\Dashboard\src\Transformer\model\swin_finetune_streamlit.pkl",
     "EfficientFormer L3 (Full FT)": r"D:\alzheimer detection.v1i.folder\Dashboard\src\Transformer\model\efficientformer_full_finetune_streamlit.pkl",
     "ViT Base Patch16 (Head FT)": r"D:\alzheimer detection.v1i.folder\Dashboard\src\Transformer\model\vit_base_finetune_head_streamlit.pkl",
+    
+    # Classical  
+    "GIST + XGBOOST": r"D:\alzheimer detection.v1i.folder\Dashboard\src\classical\model\gist_xgb_model.pkl",
+    "HOG + XGBOOST": r"D:\alzheimer detection.v1i.folder\Dashboard\src\classical\model\hog_xgb_model.pkl",
+    "Hu moments": r"D:\alzheimer detection.v1i.folder\Dashboard\src\classical\model\hu_moments_model.pkl",  
 }
 
 # ======================================================
 # BUILD TRANSFORM FROM ARTIFACT
 # ======================================================
 def build_transform(artifact):
-    mean = artifact["normalization"]["mean"]
-    std  = artifact["normalization"]["std"]
-    size = artifact["img_size"]
+    """
+    Build transform yang kompatibel dengan:
+    - CNN lama
+    - CNN baru
+    - Transformer (ViT / Swin / EfficientFormer)
+    """
+
+    # ================= IMAGE SIZE =================
+    size = artifact.get("img_size", 224)
+
+    # ================= NORMALIZATION =================
+    if "normalization" in artifact:
+        mean = artifact["normalization"].get(
+            "mean", [0.485, 0.456, 0.406]
+        )
+        std = artifact["normalization"].get(
+            "std", [0.229, 0.224, 0.225]
+        )
+    else:
+        # fallback untuk artifact lama
+        mean = artifact.get("mean", [0.485, 0.456, 0.406])
+        std  = artifact.get("std",  [0.229, 0.224, 0.225])
 
     return transforms.Compose([
         transforms.Resize((size, size)),
         transforms.ToTensor(),
-        transforms.Normalize(mean, std)
+        transforms.Normalize(mean=mean, std=std)
     ])
+
 
 # ======================================================
 # CNN SCRATCH
