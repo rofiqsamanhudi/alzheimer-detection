@@ -25,6 +25,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logging.info(f"Using device: {device}")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 MODEL_PATHS = {
     "CNN - Scratch": os.path.join(BASE_DIR, "src", "CNN", "model", "cnn_scratch_best.pkl"),
     "CNN - EfficientNet-B0": os.path.join(BASE_DIR, "src", "CNN", "model", "efficientnet_b0_full_finetune.pkl"),
@@ -37,17 +38,18 @@ MODEL_PATHS = {
     "GIST + XGBOOST": os.path.join(BASE_DIR, "src", "classical", "model", "gist_xgb_model.pkl"),
 }
 
-MODEL_METRICS = {
-    "CNN - Scratch": {"Accuracy": "92.50%", "Precision": "91.80%", "Recall": "92.30%", "F1-Score": "92.00%"},
-    "CNN - EfficientNet-B0": {"Accuracy": "95.00%", "Precision": "94.50%", "Recall": "95.20%", "F1-Score": "94.80%"},
-    "CNN - ResNet50 + LoRA": {"Accuracy": "96.20%", "Precision": "95.90%", "Recall": "96.00%", "F1-Score": "95.95%"},
-    "Swin Transformer (Full FT)": {"Accuracy": "98.00%", "Precision": "97.80%", "Recall": "98.10%", "F1-Score": "97.95%"},
-    "EfficientFormer L3 (Full FT)": {"Accuracy": "97.50%", "Precision": "97.20%", "Recall": "97.60%", "F1-Score": "97.40%"},
-    "ViT Base Patch16 (Head FT)": {"Accuracy": "98.57%", "Precision": "98.70%", "Recall": "98.47%", "F1-Score": "98.58%"},
-    "HOG + XGBOOST": {"Accuracy": "88.00%", "Precision": "87.50%", "Recall": "88.20%", "F1-Score": "87.80%"},
-    "HU Moments + XGBOOST": {"Accuracy": "85.00%", "Precision": "84.50%", "Recall": "85.30%", "F1-Score": "84.90%"},
-    "GIST + XGBOOST": {"Accuracy": "87.00%", "Precision": "86.50%", "Recall": "87.10%", "F1-Score": "86.80%"},
-}
+# Model Leaderboard Data (sorted by Accuracy descending)
+MODEL_LEADERBOARD = [
+    {"Model": "ViT Base Patch16 (Head FT)",     "Accuracy": 96.57},
+    {"Model": "CNN - ResNet50 + LoRA",          "Accuracy": 95.45},
+    {"Model": "Swin Transformer (Full FT)",     "Accuracy": 95.34},
+    {"Model": "CNN - Scratch",                  "Accuracy": 95.29},
+    {"Model": "CNN - EfficientNet-B0",          "Accuracy": 94.98},
+    {"Model": "EfficientFormer L3 (Full FT)",   "Accuracy": 93.14},
+    {"Model": "GIST + XGBOOST",                 "Accuracy": 92.93},
+    {"Model": "HOG + XGBOOST",                  "Accuracy": 88.79},
+    {"Model": "HU Moments + XGBOOST",           "Accuracy": 88.58},
+]
 
 SUPPORTED_FORMATS = ["jpg", "jpeg", "png"]
 
@@ -344,20 +346,41 @@ def load_classical_artifact(path: str):
 # ============================
 with st.sidebar:
     st.title("🧠 Alzheimer Detection")
+
     uploaded = st.file_uploader("Upload MRI Scan", type=SUPPORTED_FORMATS)
+
     method = st.selectbox("Select Model", options=list(MODEL_PATHS.keys()))
-    analyze_btn = st.button("🔍 Analyze Scan", disabled=uploaded is None, use_container_width=True)
+
+    analyze_btn = st.button(
+        "🔍 Analyze Scan",
+        disabled=uploaded is None,
+        use_container_width=True
+    )
+
     st.markdown("---")
+
     st.caption(f"Device: {device}")
     st.caption(f"Date: {datetime.now().strftime('%B %d, %Y')}")
+
     st.warning("⚠️ AI result is assistive only. Confirm with clinician.")
+
     st.markdown("---")
+
     st.subheader("🏆 Model Leaderboard")
-    leaderboard = pd.DataFrame(MODEL_METRICS).T
-    leaderboard["Accuracy"] = leaderboard["Accuracy"].str.rstrip("%").astype(float)
-    leaderboard = leaderboard.sort_values("Accuracy", ascending=False)
-    for idx, row in leaderboard.iterrows():
-        st.write(f"**{idx}**: {row['Accuracy']:.2f}%")
+
+    leaderboard_df = pd.DataFrame(MODEL_LEADERBOARD)
+
+    st.dataframe(
+        leaderboard_df.style
+        .format({"Accuracy": "{:.2f}%"})
+        .set_properties(**{"text-align": "left", "font-size": "14px"}) # pyright: ignore[reportArgumentType]
+        .set_table_styles([
+            {"selector": "th", "props": [("font-weight", "bold"), ("text-align", "left")]},
+            {"selector": "td", "props": [("padding", "8px")]},
+        ]),
+        use_container_width=True,
+        hide_index=True
+    )
 
 st.title("Alzheimer's MRI Detection Dashboard")
 
@@ -366,9 +389,12 @@ if uploaded:
     image_np = np.array(image_pil)
 
     st.markdown("### 📊 Analysis Results")
+
     img_col1, img_col2 = st.columns(2)
+
     with img_col1:
         st.image(image_pil, caption="Uploaded MRI Scan", use_container_width=True)
+
     with img_col2:
         heatmap_placeholder = st.empty()
 
@@ -420,7 +446,7 @@ if uploaded:
             if st.session_state.get('overlaid') is not None:
                 heatmap_placeholder.image(
                     st.session_state['overlaid'],
-                    caption="🔥 Model Explanation Heatmap (Grad-CAM)",
+                    caption="Model Explanation Heatmap (Grad-CAM)",
                     use_container_width=True
                 )
                 st.caption("Red/orange areas indicate regions most influential to the model's prediction.")
@@ -430,13 +456,14 @@ if uploaded:
                 else:
                     heatmap_placeholder.warning("⚠️ Heatmap generation failed for this model. Prediction is still valid.")
 
-        # Results layout
+        # Probability results
         prob_df = pd.DataFrame({
             "Stage": st.session_state['class_names'],
             "Probability": st.session_state['probs']
         }).sort_values("Probability", ascending=False).reset_index(drop=True)
 
         col1, col2 = st.columns([1, 2])
+
         with col1:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("🔮 Prediction")
@@ -471,6 +498,7 @@ if uploaded:
             "alzheimer_probabilities.csv",
             use_container_width=True
         )
+
         st.dataframe(prob_df.style.format({"Probability": "{:.2%}"}))
 
     else:
