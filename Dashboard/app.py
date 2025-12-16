@@ -80,7 +80,7 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 
 # ============================
-# HELPER FUNCTIONS (tetap sama)
+# HELPER FUNCTIONS
 # ============================
 def build_transform(artifact: dict) -> transforms.Compose:
     size = artifact.get("img_size", 224)
@@ -107,6 +107,7 @@ class SimpleCNN(nn.Module):
             nn.Dropout(0.4),
             nn.Linear(256, num_classes)
         )
+
     def forward(self, x):
         return self.classifier(self.features(x))
 
@@ -120,6 +121,7 @@ class LoRALinear(nn.Module):
         self.linear.weight.requires_grad = False
         nn.init.kaiming_uniform_(self.lora_down.weight, a=np.sqrt(5))
         nn.init.zeros_(self.lora_up.weight)
+
     def forward(self, x):
         return self.linear(x) + self.lora_up(self.lora_down(x)) * self.scaling
 
@@ -137,7 +139,7 @@ def apply_lora(model: nn.Module, r: int, alpha: float) -> nn.Module:
 def extract_hog(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     gray = cv2.resize(gray, (128, 128))
-    return hog(gray, orientations=9, pixels_per_cell=(8,8), cells_per_block=(2,2), block_norm="L2-Hys").astype(np.float32)
+    return hog(gray, orientations=9, pixels_per_cell=(8, 8), cells_per_block=(2, 2), block_norm="L2-Hys").astype(np.float32)
 
 def extract_hu_multipatch(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -147,7 +149,7 @@ def extract_hu_multipatch(image: np.ndarray) -> np.ndarray:
     features = []
     for i in range(4):
         for j in range(4):
-            patch = gray[i*ph:(i+1)*ph, j*pw:(j+1)*pw]
+            patch = gray[i * ph:(i + 1) * ph, j * pw:(j + 1) * pw]
             hu = cv2.HuMoments(cv2.moments(patch)).flatten()
             hu = -np.sign(hu) * np.log10(np.abs(hu) + 1e-10)
             features.extend(hu)
@@ -168,12 +170,12 @@ def extract_gist_like(image: np.ndarray) -> np.ndarray:
             response = np.abs(dx * np.cos(rad) + dy * np.sin(rad))
             for i in range(4):
                 for j in range(4):
-                    block = response[i*block_h:(i+1)*block_h, j*block_w:(j+1)*block_w]
+                    block = response[i * block_h:(i + 1) * block_h, j * block_w:(j + 1) * block_w]
                     features.append(np.mean(block))
     return np.array(features, dtype=np.float32)
 
 # ============================
-# FINAL HEATMAP GENERATION - FIXED FOR RESNET & EFFICIENTFORMER
+# HEATMAP GENERATION
 # ============================
 def clear_all_backward_hooks(model: nn.Module):
     for module in model.modules():
@@ -187,7 +189,7 @@ def clear_all_backward_hooks(model: nn.Module):
 def generate_heatmap(model, x, method, class_idx=None):
     model.eval()
     x = x.clone().detach().requires_grad_(True)
-    
+
     activations = []
     gradients = []
 
@@ -202,53 +204,41 @@ def generate_heatmap(model, x, method, class_idx=None):
         if len(grad_output) > 0 and grad_output[0] is not None:
             gradients.append(grad_output[0].detach())
 
-    # PERBAIKAN KHUSUS UNTUK 2 MODEL
-    if "ResNet50" in method:
-        # ResNet50 + LoRA: gunakan seluruh layer4 (block terakhir) sebagai target
-        # Ini paling stabil karena output spatial masih ada sebelum global pooling
-        target_layer = model.layer4  # bukan layer4[-1], tapi seluruh sequential
+    # Target layer selection
+    if "EfficientNet" in method:
+        target_layer = model.features[6]
         hook_type = "full"
-
+    elif "ResNet50" in method:
+        target_layer = model.layer4
+        hook_type = "full"
+    elif "Scratch" in method:
+        target_layer = model.features[-1]
+        hook_type = "regular"
+    elif "ViT" in method:
+        target_layer = model.blocks[-1].norm1
+        hook_type = "full"
+    elif "Swin" in method:
+        target_layer = model.norm
+        hook_type = "full"
     elif "EfficientFormer" in method:
-        # EfficientFormer: target ke blok terakhir di stage terakhir yang masih punya spatial dim
         last_stage = model.stages[-1]
         if hasattr(last_stage, 'blocks') and len(last_stage.blocks) > 0:
             last_block = last_stage.blocks[-1]
-            # Cari layer yang outputnya masih [B, C, H, W], biasanya ff (MLP) atau conv di akhir block
             if hasattr(last_block, 'ffn') and hasattr(last_block.ffn, 'fc2'):
-                target_layer = last_block.ffn.fc2  # fc2 setelah activation
+                target_layer = last_block.ffn.fc2
             elif hasattr(last_block, 'mlp'):
                 target_layer = last_block.mlp.fc2 if hasattr(last_block.mlp, 'fc2') else last_block.mlp
             elif hasattr(last_block, 'conv'):
                 target_layer = last_block.conv
             else:
-                target_layer = last_block  # fallback
+                target_layer = last_block
         else:
             target_layer = last_stage
         hook_type = "full"
-
-    # MODEL LAIN TETAP (sudah jalan)
-    elif "Scratch" in method:
-        target_layer = model.features[-1]
-        hook_type = "regular"
-
-    elif "EfficientNet" in method:
-        target_layer = model.features[7]
-        hook_type = "full"
-
-    elif "ViT" in method:
-        target_layer = model.blocks[-1].norm1
-        hook_type = "full"
-
-    elif "Swin" in method:
-        target_layer = model.norm
-        hook_type = "full"
-
     else:
         return None
 
     clear_all_backward_hooks(model)
-
     fwd_handle = target_layer.register_forward_hook(forward_hook)
 
     try:
@@ -278,7 +268,7 @@ def generate_heatmap(model, x, method, class_idx=None):
         act = activations[0]
         grad = gradients[0]
 
-        # Transformer handling
+        # Handle transformer-style activations
         if any(t in method for t in ["ViT", "Swin", "EfficientFormer"]):
             if act.dim() == 3:
                 B, seq_len, C = act.shape
@@ -308,19 +298,20 @@ def generate_heatmap(model, x, method, class_idx=None):
         bwd_handle.remove()
 
 def overlay_heatmap(original_image: np.ndarray, cam: np.ndarray) -> np.ndarray:
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET) # pyright: ignore[reportCallIssue]
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
     overlay = heatmap * 0.4 + original_image * 0.6
     return np.clip(overlay, 0, 255).astype(np.uint8)
 
 # ============================
-# MODEL LOADING (tetap sama)
+# MODEL LOADING
 # ============================
 @st.cache_resource(show_spinner=False)
 def load_deep_model(method: str, path: str):
     with open(path, "rb") as f:
         artifact = pickle.load(f)
     num_classes = artifact["num_classes"]
+
     if method == "CNN - Scratch":
         model = SimpleCNN(num_classes)
     elif method == "CNN - EfficientNet-B0":
@@ -339,6 +330,7 @@ def load_deep_model(method: str, path: str):
         model = create_model("vit_base_patch16_224", pretrained=False, num_classes=num_classes)
     else:
         raise ValueError("Unknown model")
+
     model.load_state_dict(artifact["model_state_dict"])
     model.to(device).eval()
     return model, artifact
@@ -348,7 +340,7 @@ def load_classical_artifact(path: str):
     return joblib.load(path)
 
 # ============================
-# SIDEBAR & MAIN (update versi saja)
+# SIDEBAR & MAIN INTERFACE
 # ============================
 with st.sidebar:
     st.title("🧠 Alzheimer Detection")
@@ -359,7 +351,6 @@ with st.sidebar:
     st.caption(f"Device: {device}")
     st.caption(f"Date: {datetime.now().strftime('%B %d, %Y')}")
     st.warning("⚠️ AI result is assistive only. Confirm with clinician.")
-    st.caption("Version 7.0 - FINAL: ResNet50+LoRA & EfficientFormer Heatmap FIXED")
     st.markdown("---")
     st.subheader("🏆 Model Leaderboard")
     leaderboard = pd.DataFrame(MODEL_METRICS).T
@@ -368,9 +359,7 @@ with st.sidebar:
     for idx, row in leaderboard.iterrows():
         st.write(f"**{idx}**: {row['Accuracy']:.2f}%")
 
-# ... (bagian main dashboard tetap persis sama seperti kode kamu sebelumnya)
-
-st.title("🧠 Alzheimer's MRI Detection Dashboard")
+st.title("Alzheimer's MRI Detection Dashboard")
 
 if uploaded:
     image_pil = Image.open(uploaded).convert("RGB")
@@ -408,7 +397,7 @@ if uploaded:
                 else:
                     model, artifact = load_deep_model(method, path)
                     transform = build_transform(artifact)
-                    x = transform(image_pil).unsqueeze(0).to(device)
+                    x = transform(image_pil).unsqueeze(0).to(device) # pyright: ignore[reportAttributeAccessIssue]
                     with torch.no_grad():
                         logits = model(x)
                         probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
@@ -426,9 +415,14 @@ if uploaded:
                     'overlaid': overlaid
                 })
 
+        # Display heatmap
         with img_col2:
             if st.session_state.get('overlaid') is not None:
-                heatmap_placeholder.image(st.session_state['overlaid'], caption="🔥 Model Explanation Heatmap (Grad-CAM)", use_container_width=True)
+                heatmap_placeholder.image(
+                    st.session_state['overlaid'],
+                    caption="🔥 Model Explanation Heatmap (Grad-CAM)",
+                    use_container_width=True
+                )
                 st.caption("Red/orange areas indicate regions most influential to the model's prediction.")
             else:
                 if st.session_state.get('is_classical'):
@@ -436,6 +430,7 @@ if uploaded:
                 else:
                     heatmap_placeholder.warning("⚠️ Heatmap generation failed for this model. Prediction is still valid.")
 
+        # Results layout
         prob_df = pd.DataFrame({
             "Stage": st.session_state['class_names'],
             "Probability": st.session_state['probs']
@@ -446,11 +441,11 @@ if uploaded:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("🔮 Prediction")
             st.metric("Predicted Stage", st.session_state['pred_label'])
-            st.metric("Confidence", f"{max(st.session_state['probs'])*100:.2f}%")
+            st.metric("Confidence", f"{max(st.session_state['probs']) * 100:.2f}%")
             st.subheader("Top 3 Probabilities")
             for i in range(min(3, len(prob_df))):
                 row = prob_df.iloc[i]
-                st.metric(row["Stage"], f"{row['Probability']*100:.2f}%")
+                st.metric(row["Stage"], f"{row['Probability'] * 100:.2f}%")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col2:
