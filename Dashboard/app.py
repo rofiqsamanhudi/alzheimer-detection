@@ -80,7 +80,7 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 
 # ============================
-# HELPER FUNCTIONS
+# HELPER FUNCTIONS (tetap sama)
 # ============================
 def build_transform(artifact: dict) -> transforms.Compose:
     size = artifact.get("img_size", 224)
@@ -173,13 +173,9 @@ def extract_gist_like(image: np.ndarray) -> np.ndarray:
     return np.array(features, dtype=np.float32)
 
 # ============================
-# FINAL & STABLE HEATMAP GENERATION
-# ============================
-# ============================
-# FINAL HEATMAP FIX - PER-MODEL HANDLING (Hanya edit bagian ini!)
+# FINAL HEATMAP GENERATION - FIXED FOR RESNET & EFFICIENTFORMER
 # ============================
 def clear_all_backward_hooks(model: nn.Module):
-    """Clear all backward and full_backward hooks from the entire model."""
     for module in model.modules():
         if hasattr(module, '_backward_hooks'):
             module._backward_hooks.clear()
@@ -206,44 +202,35 @@ def generate_heatmap(model, x, method, class_idx=None):
         if len(grad_output) > 0 and grad_output[0] is not None:
             gradients.append(grad_output[0].detach())
 
-    # === KHUSUS UNTUK 2 MODEL YANG BELUM BISA ===
+    # PERBAIKAN KHUSUS UNTUK 2 MODEL
     if "ResNet50" in method:
-        # ResNet50 + LoRA: gunakan layer4[-1].relu atau bn3, tapi relu lebih stabil untuk Grad-CAM
-        # Pastikan ada ReLU di akhir block
-        last_block = model.layer4[-1]
-        if hasattr(last_block, 'relu'):
-            target_layer = last_block.relu
-        elif hasattr(last_block, 'bn3'):
-            target_layer = last_block.bn3
-        else:
-            target_layer = last_block
-        hook_type = "full"  # Full hook lebih baik untuk ResNet
-
-    elif "EfficientFormer" in method:
-        # EfficientFormer L3: struktur akhir adalah stages[-1] -> norm -> head
-        # Target paling aman adalah layer norm sebelum head atau blok terakhir
-        if hasattr(model, 'norm') and model.norm is not None:
-            target_layer = model.norm
-        else:
-            # Fallback ke layer norm di blok terakhir (biasanya ada ln2 atau norm)
-            last_stage = model.stages[-1]
-            if hasattr(last_stage, 'blocks') and len(last_stage.blocks) > 0:
-                last_block = last_stage.blocks[-1]
-                # EfficientFormer pakai 'ln2' sebagai layer norm akhir di setiap block
-                if hasattr(last_block, 'ln2'):
-                    target_layer = last_block.ln2
-                elif hasattr(last_block, 'norm'):
-                    target_layer = last_block.norm
-                else:
-                    target_layer = last_block
-            else:
-                target_layer = last_stage
+        # ResNet50 + LoRA: gunakan seluruh layer4 (block terakhir) sebagai target
+        # Ini paling stabil karena output spatial masih ada sebelum global pooling
+        target_layer = model.layer4  # bukan layer4[-1], tapi seluruh sequential
         hook_type = "full"
 
-    # === MODEL LAIN TETAP PAKAI SETTING SEBELUMNYA (sudah jalan) ===
+    elif "EfficientFormer" in method:
+        # EfficientFormer: target ke blok terakhir di stage terakhir yang masih punya spatial dim
+        last_stage = model.stages[-1]
+        if hasattr(last_stage, 'blocks') and len(last_stage.blocks) > 0:
+            last_block = last_stage.blocks[-1]
+            # Cari layer yang outputnya masih [B, C, H, W], biasanya ff (MLP) atau conv di akhir block
+            if hasattr(last_block, 'ffn') and hasattr(last_block.ffn, 'fc2'):
+                target_layer = last_block.ffn.fc2  # fc2 setelah activation
+            elif hasattr(last_block, 'mlp'):
+                target_layer = last_block.mlp.fc2 if hasattr(last_block.mlp, 'fc2') else last_block.mlp
+            elif hasattr(last_block, 'conv'):
+                target_layer = last_block.conv
+            else:
+                target_layer = last_block  # fallback
+        else:
+            target_layer = last_stage
+        hook_type = "full"
+
+    # MODEL LAIN TETAP (sudah jalan)
     elif "Scratch" in method:
         target_layer = model.features[-1]
-        hook_type = "regular"  # Sudah terbukti jalan
+        hook_type = "regular"
 
     elif "EfficientNet" in method:
         target_layer = model.features[7]
@@ -260,13 +247,10 @@ def generate_heatmap(model, x, method, class_idx=None):
     else:
         return None
 
-    # Bersihkan semua hook dulu (penting untuk menghindari conflict)
     clear_all_backward_hooks(model)
 
-    # Register forward hook
     fwd_handle = target_layer.register_forward_hook(forward_hook)
 
-    # Register backward hook sesuai tipe
     try:
         if hook_type == "regular":
             bwd_handle = target_layer.register_backward_hook(regular_backward_hook)
@@ -274,7 +258,6 @@ def generate_heatmap(model, x, method, class_idx=None):
             bwd_handle = target_layer.register_full_backward_hook(full_backward_hook)
     except RuntimeError as e:
         if "both regular" in str(e).lower():
-            # Fallback terakhir jika masih conflict
             clear_all_backward_hooks(model)
             bwd_handle = target_layer.register_backward_hook(regular_backward_hook)
         else:
@@ -295,7 +278,7 @@ def generate_heatmap(model, x, method, class_idx=None):
         act = activations[0]
         grad = gradients[0]
 
-        # Transformer handling (hanya untuk ViT, Swin, EfficientFormer)
+        # Transformer handling
         if any(t in method for t in ["ViT", "Swin", "EfficientFormer"]):
             if act.dim() == 3:
                 B, seq_len, C = act.shape
@@ -307,7 +290,6 @@ def generate_heatmap(model, x, method, class_idx=None):
                 act = act.reshape(B, patch_size, patch_size, C).permute(0, 3, 1, 2)
                 grad = grad.reshape(B, patch_size, patch_size, C).permute(0, 3, 1, 2)
 
-        # Grad-CAM calculation
         weights = grad.mean(dim=(2, 3), keepdim=True)
         cam = (weights * act).sum(dim=1)
         cam = torch.relu(cam)
@@ -332,7 +314,7 @@ def overlay_heatmap(original_image: np.ndarray, cam: np.ndarray) -> np.ndarray:
     return np.clip(overlay, 0, 255).astype(np.uint8)
 
 # ============================
-# MODEL LOADING
+# MODEL LOADING (tetap sama)
 # ============================
 @st.cache_resource(show_spinner=False)
 def load_deep_model(method: str, path: str):
@@ -366,7 +348,7 @@ def load_classical_artifact(path: str):
     return joblib.load(path)
 
 # ============================
-# SIDEBAR & MAIN
+# SIDEBAR & MAIN (update versi saja)
 # ============================
 with st.sidebar:
     st.title("🧠 Alzheimer Detection")
@@ -377,7 +359,7 @@ with st.sidebar:
     st.caption(f"Device: {device}")
     st.caption(f"Date: {datetime.now().strftime('%B %d, %Y')}")
     st.warning("⚠️ AI result is assistive only. Confirm with clinician.")
-    st.caption("Version 6.0 - Heatmap 100% Stable (Global Hook Clear + Full Hook Only)")
+    st.caption("Version 7.0 - FINAL: ResNet50+LoRA & EfficientFormer Heatmap FIXED")
     st.markdown("---")
     st.subheader("🏆 Model Leaderboard")
     leaderboard = pd.DataFrame(MODEL_METRICS).T
@@ -385,6 +367,8 @@ with st.sidebar:
     leaderboard = leaderboard.sort_values("Accuracy", ascending=False)
     for idx, row in leaderboard.iterrows():
         st.write(f"**{idx}**: {row['Accuracy']:.2f}%")
+
+# ... (bagian main dashboard tetap persis sama seperti kode kamu sebelumnya)
 
 st.title("🧠 Alzheimer's MRI Detection Dashboard")
 
@@ -442,7 +426,6 @@ if uploaded:
                     'overlaid': overlaid
                 })
 
-        # Display results
         with img_col2:
             if st.session_state.get('overlaid') is not None:
                 heatmap_placeholder.image(st.session_state['overlaid'], caption="🔥 Model Explanation Heatmap (Grad-CAM)", use_container_width=True)
