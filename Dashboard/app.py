@@ -298,7 +298,7 @@ def generate_heatmap(model, x, method, class_idx=None):
         bwd_handle.remove()
 
 def overlay_heatmap(original_image: np.ndarray, cam: np.ndarray) -> np.ndarray:
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET) # pyright: ignore[reportCallIssue]
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET) # pyright: ignore[reportArgumentType, reportCallIssue]
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
     overlay = heatmap * 0.4 + original_image * 0.6
     return np.clip(overlay, 0, 255).astype(np.uint8)
