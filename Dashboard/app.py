@@ -118,6 +118,8 @@ class LoRALinear(nn.Module):
         self.lora_down = nn.Linear(linear.in_features, r, bias=False)
         self.lora_up = nn.Linear(r, linear.out_features, bias=False)
         self.linear.weight.requires_grad = False
+        nn.init.kaiming_uniform_(self.lora_down.weight, a=np.sqrt(5))
+        nn.init.zeros_(self.lora_up.weight)
     def forward(self, x):
         return self.linear(x) + self.lora_up(self.lora_down(x)) * self.scaling
 
@@ -171,88 +173,90 @@ def extract_gist_like(image: np.ndarray) -> np.ndarray:
     return np.array(features, dtype=np.float32)
 
 # ============================
-# UNIVERSAL & STABLE HEATMAP GENERATION
+# FIXED HEATMAP GENERATION USING FULL BACKWARD HOOKS
 # ============================
 def generate_heatmap(model, x, method, class_idx=None):
+    model.eval()
+    x = x.clone().detach().requires_grad_(True)
+
+    activations = []
+    gradients = []
+
+    def forward_hook(module, input, output):
+        activations.append(output.detach())
+
+    def full_backward_hook(module, grad_input, grad_output):
+        if grad_output[0] is not None:
+            gradients.append(grad_output[0].detach())
+
+    # Select appropriate target layer
+    if "Scratch" in method:
+        target_layer = model.features[-1]
+    elif "EfficientNet" in method:
+        target_layer = model.features[-1]
+    elif "ResNet50" in method:
+        target_layer = model.layer4[-1]
+    elif "ViT" in method:
+        target_layer = model.blocks[-1].norm1
+    elif "Swin" in method:
+        target_layer = model.norm
+    elif "EfficientFormer" in method:
+        target_layer = model.stages[-1].blocks[-1].norm if hasattr(model.stages[-1].blocks[-1], "norm") else model.norm
+    else:
+        return None
+
+    # Register hooks safely
+    fwd_handle = target_layer.register_forward_hook(forward_hook)
+    bwd_handle = target_layer.register_full_backward_hook(full_backward_hook)  # Gunakan full_backward_hook
+
     try:
-        model.eval()
-        activations = []
-        gradients = []
-
-        def forward_hook(module, input, output):
-            activations.append(output.detach().cpu())
-
-        def backward_hook(module, grad_input, grad_output):
-            if grad_output[0] is not None:
-                gradients.append(grad_output[0].detach().cpu())
-
-        # Choose target layer based on model type
-        if "Scratch" in method:
-            target_layer = model.features[-1]
-        elif "EfficientNet" in method:
-            target_layer = model.features[8]
-        elif "ResNet50" in method:
-            target_layer = model.layer4[-1].conv3
-        elif "ViT" in method:
-            target_layer = model.blocks[-1].norm1
-        elif "Swin" in method:
-            target_layer = model.norm
-        elif "EfficientFormer" in method:
-            target_layer = model.stages[-1].blocks[-1].mlp.fc2 if hasattr(model.stages[-1].blocks[-1], "mlp") else model.norm
-        else:
-            return None
-
-        # Register hooks
-        fwd_handle = target_layer.register_forward_hook(forward_hook)
-        bwd_handle = target_layer.register_backward_hook(backward_hook)
-
         logits = model(x)
         if class_idx is None:
             class_idx = logits.argmax(dim=1).item()
 
         model.zero_grad()
-        logits[:, class_idx].sum().backward()
+        logits[0, class_idx].backward(retain_graph=False)
 
-        fwd_handle.remove()
-        bwd_handle.remove()
-
-        if not activations or not gradients:
+        if len(activations) == 0 or len(gradients) == 0:
             return None
 
-        act = activations[0][0]  # [C, H, W] or [N+1, C]
-        grad = gradients[0][0]
+        act = activations[0]  # [1, C, H, W] or [1, seq_len, C]
+        grad = gradients[0]
 
-        # Special handling for Transformer models
-        if any(tr in method for tr in ["ViT", "Swin", "EfficientFormer"]):
-            if act.dim() == 2:  # [seq_len, channels]
-                act = act[1:, :]  # remove CLS token
-                grad = grad[1:, :]
-                seq_len = act.shape[0]
-                patch_size = int(np.sqrt(seq_len))
-                if patch_size * patch_size == seq_len:
-                    act = act.reshape(patch_size, patch_size, -1).permute(2, 0, 1)
-                    grad = grad.reshape(patch_size, patch_size, -1).permute(2, 0, 1)
+        # Handle Vision Transformer models
+        if any(t in method for t in ["ViT", "Swin", "EfficientFormer"]):
+            if act.dim() == 3:  # [B, seq_len, C]
+                B, seq_len, C = act.shape
+                act = act[:, 1:, :]  # remove CLS token
+                grad = grad[:, 1:, :]
+                patch_size = int((seq_len - 1)**0.5)
+                if patch_size * patch_size != seq_len - 1:
+                    return None
+                act = act.reshape(B, patch_size, patch_size, C).permute(0, 3, 1, 2)
+                grad = grad.reshape(B, patch_size, patch_size, C).permute(0, 3, 1, 2)
 
-        # Compute weights and CAM
-        weights = torch.mean(grad, dim=(1, 2), keepdim=True)
-        cam = torch.sum(weights * act, dim=0)
+        # Grad-CAM computation
+        weights = grad.mean(dim=(2, 3), keepdim=True)  # [B, C, 1, 1]
+        cam = (weights * act).sum(dim=1)  # [B, H, W]
         cam = torch.relu(cam)
-        cam = cam.numpy()
+        cam = cam[0].cpu().numpy()
 
         cam = cv2.resize(cam, (x.shape[3], x.shape[2]))
         cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
         return cam
 
     except Exception as e:
-        logging.error(f"Heatmap generation failed: {e}")
+        logging.error(f"Heatmap generation failed for {method}: {e}")
         return None
+    finally:
+        fwd_handle.remove()
+        bwd_handle.remove()
 
 def overlay_heatmap(original_image: np.ndarray, cam: np.ndarray) -> np.ndarray:
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
-    heatmap = np.float32(heatmap) / 255.0
-    overlay = heatmap * 0.4 + np.float32(original_image) / 255.0 * 0.6
-    overlay = np.clip(overlay * 255, 0, 255).astype(np.uint8)
-    return overlay
+    heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+    overlay = heatmap * 0.4 + original_image * 0.6
+    return np.clip(overlay, 0, 255).astype(np.uint8)
 
 # ============================
 # MODEL LOADING
@@ -289,7 +293,7 @@ def load_classical_artifact(path: str):
     return joblib.load(path)
 
 # ============================
-# SIDEBAR
+# SIDEBAR & MAIN
 # ============================
 with st.sidebar:
     st.title("🧠 Alzheimer Detection")
@@ -300,7 +304,7 @@ with st.sidebar:
     st.caption(f"Device: {device}")
     st.caption(f"Date: {datetime.now().strftime('%B %d, %Y')}")
     st.warning("⚠️ AI result is assistive only. Confirm with clinician.")
-    st.caption("Version 4.0 - All Models with Working Heatmap")
+    st.caption("Version 4.2 - Heatmap Fixed (Full Backward Hooks)")
 
     st.markdown("---")
     st.subheader("🏆 Model Leaderboard")
@@ -310,9 +314,6 @@ with st.sidebar:
     for idx, row in leaderboard.iterrows():
         st.write(f"**{idx}**: {row['Accuracy']:.2f}%")
 
-# ============================
-# MAIN PAGE
-# ============================
 st.title("🧠 Alzheimer's MRI Detection Dashboard")
 
 if uploaded:
@@ -330,7 +331,6 @@ if uploaded:
     if analyze_btn or 'pred_label' in st.session_state:
         if analyze_btn:
             st.session_state.clear()
-
             with st.spinner("Analyzing image and generating explanation..."):
                 path = MODEL_PATHS[method]
                 is_classical = any(k in method for k in ["HOG", "HU", "GIST"])
@@ -349,8 +349,7 @@ if uploaded:
                     model = artifact["model"]
                     probs = model.predict_proba(feat)[0]
                     class_names = artifact.get("class_names", ["Non-Demented", "Mild", "Moderate", "Very Mild"])
-                    x = None
-                    overlaid = None  # classical no heatmap
+                    overlaid = None
                 else:
                     model, artifact = load_deep_model(method, path)
                     transform = build_transform(artifact)
@@ -362,12 +361,8 @@ if uploaded:
 
                     class_names = artifact.get("class_names", [f"Class {i}" for i in range(len(probs))])
 
-                    # Generate heatmap
-                    cam = generate_heatmap(model, x, method, np.argmax(probs))
-                    if cam is not None:
-                        overlaid = overlay_heatmap(image_np, cam)
-                    else:
-                        overlaid = None
+                    cam = generate_heatmap(model, x, method, class_idx=np.argmax(probs))
+                    overlaid = overlay_heatmap(image_np, cam) if cam is not None else None
 
                 pred_label = class_names[np.argmax(probs)]
                 st.session_state.update({
@@ -382,13 +377,13 @@ if uploaded:
         # Display results
         with img_col2:
             if st.session_state.get('overlaid') is not None:
-                heatmap_placeholder.image(st.session_state['overlaid'], caption="🔥 Model Explanation Heatmap", use_container_width=True)
+                heatmap_placeholder.image(st.session_state['overlaid'], caption="🔥 Model Explanation Heatmap (Grad-CAM)", use_container_width=True)
                 st.caption("Red/orange areas indicate regions most influential to the model's prediction.")
             else:
                 if st.session_state.get('is_classical'):
                     heatmap_placeholder.info("ℹ️ Classical models do not support visual explanation heatmaps.")
                 else:
-                    heatmap_placeholder.info("ℹ️ Heatmap generation skipped (technical stability). Prediction remains accurate.")
+                    heatmap_placeholder.warning("⚠️ Heatmap generation failed for this model. Prediction is still valid.")
 
         prob_df = pd.DataFrame({
             "Stage": st.session_state['class_names'],
