@@ -122,6 +122,7 @@ torch==2.3.0+cpu torchvision==0.18.0+cpu torchaudio==2.3.0+cpu --index-url https
 ```
 alzheimer-detection/
 ├── dataset/                     # Dataset mentah citra medis
+├── Dashboard/                   # Dashboard local (streamlit)
 ├── processed_dataset/           # Dataset hasil preprocessing & fitur klasik
 ├── Fitur_Ekstraksi_Klasik/      # Folder untuk preprocessing & ekstraksi fitur ML klasik
 ├── CNN_models/                  # Model CNN scratch dan hasil training
