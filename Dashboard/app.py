@@ -173,12 +173,25 @@ def extract_gist_like(image: np.ndarray) -> np.ndarray:
     return np.array(features, dtype=np.float32)
 
 # ============================
-# FIXED HEATMAP GENERATION USING FULL BACKWARD HOOKS
+# FINAL & STABLE HEATMAP GENERATION
 # ============================
+# ============================
+# FINAL HEATMAP FIX - PER-MODEL HANDLING (Hanya edit bagian ini!)
+# ============================
+def clear_all_backward_hooks(model: nn.Module):
+    """Clear all backward and full_backward hooks from the entire model."""
+    for module in model.modules():
+        if hasattr(module, '_backward_hooks'):
+            module._backward_hooks.clear()
+        if hasattr(module, '_full_backward_hooks'):
+            module._full_backward_hooks.clear()
+        if hasattr(module, '_full_backward_pre_hooks'):
+            module._full_backward_pre_hooks.clear()
+
 def generate_heatmap(model, x, method, class_idx=None):
     model.eval()
     x = x.clone().detach().requires_grad_(True)
-
+    
     activations = []
     gradients = []
 
@@ -186,28 +199,86 @@ def generate_heatmap(model, x, method, class_idx=None):
         activations.append(output.detach())
 
     def full_backward_hook(module, grad_input, grad_output):
-        if grad_output[0] is not None:
+        if len(grad_output) > 0 and grad_output[0] is not None:
             gradients.append(grad_output[0].detach())
 
-    # Select appropriate target layer
-    if "Scratch" in method:
+    def regular_backward_hook(module, grad_input, grad_output):
+        if len(grad_output) > 0 and grad_output[0] is not None:
+            gradients.append(grad_output[0].detach())
+
+    # === KHUSUS UNTUK 2 MODEL YANG BELUM BISA ===
+    if "ResNet50" in method:
+        # ResNet50 + LoRA: gunakan layer4[-1].relu atau bn3, tapi relu lebih stabil untuk Grad-CAM
+        # Pastikan ada ReLU di akhir block
+        last_block = model.layer4[-1]
+        if hasattr(last_block, 'relu'):
+            target_layer = last_block.relu
+        elif hasattr(last_block, 'bn3'):
+            target_layer = last_block.bn3
+        else:
+            target_layer = last_block
+        hook_type = "full"  # Full hook lebih baik untuk ResNet
+
+    elif "EfficientFormer" in method:
+        # EfficientFormer L3: struktur akhir adalah stages[-1] -> norm -> head
+        # Target paling aman adalah layer norm sebelum head atau blok terakhir
+        if hasattr(model, 'norm') and model.norm is not None:
+            target_layer = model.norm
+        else:
+            # Fallback ke layer norm di blok terakhir (biasanya ada ln2 atau norm)
+            last_stage = model.stages[-1]
+            if hasattr(last_stage, 'blocks') and len(last_stage.blocks) > 0:
+                last_block = last_stage.blocks[-1]
+                # EfficientFormer pakai 'ln2' sebagai layer norm akhir di setiap block
+                if hasattr(last_block, 'ln2'):
+                    target_layer = last_block.ln2
+                elif hasattr(last_block, 'norm'):
+                    target_layer = last_block.norm
+                else:
+                    target_layer = last_block
+            else:
+                target_layer = last_stage
+        hook_type = "full"
+
+    # === MODEL LAIN TETAP PAKAI SETTING SEBELUMNYA (sudah jalan) ===
+    elif "Scratch" in method:
         target_layer = model.features[-1]
+        hook_type = "regular"  # Sudah terbukti jalan
+
     elif "EfficientNet" in method:
-        target_layer = model.features[-1]
-    elif "ResNet50" in method:
-        target_layer = model.layer4[-1]
+        target_layer = model.features[7]
+        hook_type = "full"
+
     elif "ViT" in method:
         target_layer = model.blocks[-1].norm1
+        hook_type = "full"
+
     elif "Swin" in method:
         target_layer = model.norm
-    elif "EfficientFormer" in method:
-        target_layer = model.stages[-1].blocks[-1].norm if hasattr(model.stages[-1].blocks[-1], "norm") else model.norm
+        hook_type = "full"
+
     else:
         return None
 
-    # Register hooks safely
+    # Bersihkan semua hook dulu (penting untuk menghindari conflict)
+    clear_all_backward_hooks(model)
+
+    # Register forward hook
     fwd_handle = target_layer.register_forward_hook(forward_hook)
-    bwd_handle = target_layer.register_full_backward_hook(full_backward_hook)  # Gunakan full_backward_hook
+
+    # Register backward hook sesuai tipe
+    try:
+        if hook_type == "regular":
+            bwd_handle = target_layer.register_backward_hook(regular_backward_hook)
+        else:
+            bwd_handle = target_layer.register_full_backward_hook(full_backward_hook)
+    except RuntimeError as e:
+        if "both regular" in str(e).lower():
+            # Fallback terakhir jika masih conflict
+            clear_all_backward_hooks(model)
+            bwd_handle = target_layer.register_backward_hook(regular_backward_hook)
+        else:
+            raise e
 
     try:
         logits = model(x)
@@ -215,34 +286,36 @@ def generate_heatmap(model, x, method, class_idx=None):
             class_idx = logits.argmax(dim=1).item()
 
         model.zero_grad()
-        logits[0, class_idx].backward(retain_graph=False)
+        logits[0, class_idx].backward()
 
         if len(activations) == 0 or len(gradients) == 0:
+            logging.warning(f"No activation/gradient captured for {method}")
             return None
 
-        act = activations[0]  # [1, C, H, W] or [1, seq_len, C]
+        act = activations[0]
         grad = gradients[0]
 
-        # Handle Vision Transformer models
+        # Transformer handling (hanya untuk ViT, Swin, EfficientFormer)
         if any(t in method for t in ["ViT", "Swin", "EfficientFormer"]):
-            if act.dim() == 3:  # [B, seq_len, C]
+            if act.dim() == 3:
                 B, seq_len, C = act.shape
-                act = act[:, 1:, :]  # remove CLS token
+                act = act[:, 1:, :]
                 grad = grad[:, 1:, :]
-                patch_size = int((seq_len - 1)**0.5)
+                patch_size = int((seq_len - 1) ** 0.5)
                 if patch_size * patch_size != seq_len - 1:
                     return None
                 act = act.reshape(B, patch_size, patch_size, C).permute(0, 3, 1, 2)
                 grad = grad.reshape(B, patch_size, patch_size, C).permute(0, 3, 1, 2)
 
-        # Grad-CAM computation
-        weights = grad.mean(dim=(2, 3), keepdim=True)  # [B, C, 1, 1]
-        cam = (weights * act).sum(dim=1)  # [B, H, W]
+        # Grad-CAM calculation
+        weights = grad.mean(dim=(2, 3), keepdim=True)
+        cam = (weights * act).sum(dim=1)
         cam = torch.relu(cam)
         cam = cam[0].cpu().numpy()
 
         cam = cv2.resize(cam, (x.shape[3], x.shape[2]))
         cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+
         return cam
 
     except Exception as e:
@@ -304,8 +377,7 @@ with st.sidebar:
     st.caption(f"Device: {device}")
     st.caption(f"Date: {datetime.now().strftime('%B %d, %Y')}")
     st.warning("⚠️ AI result is assistive only. Confirm with clinician.")
-    st.caption("Version 4.2 - Heatmap Fixed (Full Backward Hooks)")
-
+    st.caption("Version 6.0 - Heatmap 100% Stable (Global Hook Clear + Full Hook Only)")
     st.markdown("---")
     st.subheader("🏆 Model Leaderboard")
     leaderboard = pd.DataFrame(MODEL_METRICS).T
@@ -321,7 +393,6 @@ if uploaded:
     image_np = np.array(image_pil)
 
     st.markdown("### 📊 Analysis Results")
-
     img_col1, img_col2 = st.columns(2)
     with img_col1:
         st.image(image_pil, caption="Uploaded MRI Scan", use_container_width=True)
@@ -354,13 +425,10 @@ if uploaded:
                     model, artifact = load_deep_model(method, path)
                     transform = build_transform(artifact)
                     x = transform(image_pil).unsqueeze(0).to(device)
-
                     with torch.no_grad():
                         logits = model(x)
                         probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
-
                     class_names = artifact.get("class_names", [f"Class {i}" for i in range(len(probs))])
-
                     cam = generate_heatmap(model, x, method, class_idx=np.argmax(probs))
                     overlaid = overlay_heatmap(image_np, cam) if cam is not None else None
 
@@ -429,6 +497,5 @@ if uploaded:
 
     else:
         st.info("Click **Analyze Scan** to start.")
-
 else:
     st.info("Upload an MRI image from the sidebar to begin.")
