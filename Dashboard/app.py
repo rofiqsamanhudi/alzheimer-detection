@@ -382,7 +382,7 @@ with st.sidebar:
         hide_index=True
     )
 
-st.title("Alzheimer's MRI Detection Dashboard")
+st.title("Alzheimer's MRI Detection")
 
 if uploaded:
     image_pil = Image.open(uploaded).convert("RGB")
@@ -466,7 +466,7 @@ if uploaded:
 
         with col1:
             st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.subheader("🔮 Prediction")
+            st.subheader("⚫ Prediction")
             st.metric("Predicted Stage", st.session_state['pred_label'])
             st.metric("Confidence", f"{max(st.session_state['probs']) * 100:.2f}%")
             st.subheader("Top 3 Probabilities")
@@ -477,7 +477,7 @@ if uploaded:
 
         with col2:
             st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.subheader("📈 Probability Distribution")
+            st.subheader("⚪ Probability Distribution")
             chart = st.radio("Chart Type", ["Bar", "Pie", "Donut"], horizontal=True)
             if chart == "Bar":
                 fig = px.bar(prob_df[::-1], x="Probability", y="Stage", orientation="h",
