@@ -4,6 +4,7 @@ import torch.nn as nn
 import numpy as np
 import joblib
 import pickle
+import io
 from PIL import Image
 from torchvision import transforms, models
 from timm import create_model
@@ -20,7 +21,8 @@ import logging
 # ============================
 # CONFIGURATION AND LOGGING
 # ============================
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logging.info(f"Using device: {device}")
 
@@ -56,7 +58,8 @@ SUPPORTED_FORMATS = ["jpg", "jpeg", "png"]
 # ============================
 # PAGE CONFIG & DARK THEME
 # ============================
-st.set_page_config(page_title="Alzheimer Detection Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Alzheimer Detection Dashboard",
+                   layout="wide", initial_sidebar_state="expanded")
 
 st.markdown('''
 <style>
@@ -84,6 +87,8 @@ st.markdown('''
 # ============================
 # HELPER FUNCTIONS
 # ============================
+
+
 def build_transform(artifact: dict) -> transforms.Compose:
     size = artifact.get("img_size", 224)
     mean = artifact.get("mean", [0.485, 0.456, 0.406])
@@ -93,6 +98,7 @@ def build_transform(artifact: dict) -> transforms.Compose:
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)
     ])
+
 
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes: int):
@@ -113,6 +119,7 @@ class SimpleCNN(nn.Module):
     def forward(self, x):
         return self.classifier(self.features(x))
 
+
 class LoRALinear(nn.Module):
     def __init__(self, linear: nn.Linear, r: int, alpha: float):
         super().__init__()
@@ -127,6 +134,7 @@ class LoRALinear(nn.Module):
     def forward(self, x):
         return self.linear(x) + self.lora_up(self.lora_down(x)) * self.scaling
 
+
 def apply_lora(model: nn.Module, r: int, alpha: float) -> nn.Module:
     model = deepcopy(model)
     for name, module in model.named_modules():
@@ -138,10 +146,12 @@ def apply_lora(model: nn.Module, r: int, alpha: float) -> nn.Module:
             setattr(parent, parts[-1], LoRALinear(module, r, alpha))
     return model
 
+
 def extract_hog(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     gray = cv2.resize(gray, (128, 128))
     return hog(gray, orientations=9, pixels_per_cell=(8, 8), cells_per_block=(2, 2), block_norm="L2-Hys").astype(np.float32)
+
 
 def extract_hu_multipatch(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -156,6 +166,7 @@ def extract_hu_multipatch(image: np.ndarray) -> np.ndarray:
             hu = -np.sign(hu) * np.log10(np.abs(hu) + 1e-10)
             features.extend(hu)
     return np.array(features, dtype=np.float32)
+
 
 def extract_gist_like(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -172,13 +183,16 @@ def extract_gist_like(image: np.ndarray) -> np.ndarray:
             response = np.abs(dx * np.cos(rad) + dy * np.sin(rad))
             for i in range(4):
                 for j in range(4):
-                    block = response[i * block_h:(i + 1) * block_h, j * block_w:(j + 1) * block_w]
+                    block = response[i * block_h:(i + 1) *
+                                     block_h, j * block_w:(j + 1) * block_w]
                     features.append(np.mean(block))
     return np.array(features, dtype=np.float32)
 
 # ============================
 # HEATMAP GENERATION
 # ============================
+
+
 def clear_all_backward_hooks(model: nn.Module):
     for module in model.modules():
         if hasattr(module, '_backward_hooks'):
@@ -187,6 +201,7 @@ def clear_all_backward_hooks(model: nn.Module):
             module._full_backward_hooks.clear()
         if hasattr(module, '_full_backward_pre_hooks'):
             module._full_backward_pre_hooks.clear()
+
 
 def generate_heatmap(model, x, method, class_idx=None):
     model.eval()
@@ -229,7 +244,8 @@ def generate_heatmap(model, x, method, class_idx=None):
             if hasattr(last_block, 'ffn') and hasattr(last_block.ffn, 'fc2'):
                 target_layer = last_block.ffn.fc2
             elif hasattr(last_block, 'mlp'):
-                target_layer = last_block.mlp.fc2 if hasattr(last_block.mlp, 'fc2') else last_block.mlp
+                target_layer = last_block.mlp.fc2 if hasattr(
+                    last_block.mlp, 'fc2') else last_block.mlp
             elif hasattr(last_block, 'conv'):
                 target_layer = last_block.conv
             else:
@@ -245,13 +261,16 @@ def generate_heatmap(model, x, method, class_idx=None):
 
     try:
         if hook_type == "regular":
-            bwd_handle = target_layer.register_backward_hook(regular_backward_hook)
+            bwd_handle = target_layer.register_backward_hook(
+                regular_backward_hook)
         else:
-            bwd_handle = target_layer.register_full_backward_hook(full_backward_hook)
+            bwd_handle = target_layer.register_full_backward_hook(
+                full_backward_hook)
     except RuntimeError as e:
         if "both regular" in str(e).lower():
             clear_all_backward_hooks(model)
-            bwd_handle = target_layer.register_backward_hook(regular_backward_hook)
+            bwd_handle = target_layer.register_backward_hook(
+                regular_backward_hook)
         else:
             raise e
 
@@ -279,8 +298,10 @@ def generate_heatmap(model, x, method, class_idx=None):
                 patch_size = int((seq_len - 1) ** 0.5)
                 if patch_size * patch_size != seq_len - 1:
                     return None
-                act = act.reshape(B, patch_size, patch_size, C).permute(0, 3, 1, 2)
-                grad = grad.reshape(B, patch_size, patch_size, C).permute(0, 3, 1, 2)
+                act = act.reshape(B, patch_size, patch_size,
+                                  C).permute(0, 3, 1, 2)
+                grad = grad.reshape(
+                    B, patch_size, patch_size, C).permute(0, 3, 1, 2)
 
         weights = grad.mean(dim=(2, 3), keepdim=True)
         cam = (weights * act).sum(dim=1)
@@ -299,8 +320,10 @@ def generate_heatmap(model, x, method, class_idx=None):
         fwd_handle.remove()
         bwd_handle.remove()
 
+
 def overlay_heatmap(original_image: np.ndarray, cam: np.ndarray) -> np.ndarray:
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET) # pyright: ignore[reportArgumentType, reportCallIssue]
+    # pyright: ignore[reportArgumentType, reportCallIssue]
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
     # Resize heatmap to match original image dimensions
     h, w = original_image.shape[:2]
@@ -311,28 +334,46 @@ def overlay_heatmap(original_image: np.ndarray, cam: np.ndarray) -> np.ndarray:
 # ============================
 # MODEL LOADING
 # ============================
+
+
+class CPUUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == 'torch.storage' and name == '_load_from_bytes':
+            return lambda b: torch.load(io.BytesIO(b), map_location='cpu')
+        else:
+            return super().find_class(module, name)
+
+
 @st.cache_resource(show_spinner=False)
 def load_deep_model(method: str, path: str):
+    # Load pickle file with CPU mapping for compatibility
     with open(path, "rb") as f:
-        artifact = pickle.load(f)
+        if torch.cuda.is_available():
+            artifact = pickle.load(f)
+        else:
+            artifact = CPUUnpickler(f).load()
     num_classes = artifact["num_classes"]
 
     if method == "CNN - Scratch":
         model = SimpleCNN(num_classes)
     elif method == "CNN - EfficientNet-B0":
         model = models.efficientnet_b0(weights=None)
-        model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
+        model.classifier[1] = nn.Linear(
+            model.classifier[1].in_features, num_classes)
     elif method == "CNN - ResNet50 + LoRA":
         base = models.resnet50(weights=None)
         base.fc = nn.Linear(base.fc.in_features, num_classes)
-        model = apply_lora(base, artifact["lora"]["r"], artifact["lora"]["alpha"])
+        model = apply_lora(
+            base, artifact["lora"]["r"], artifact["lora"]["alpha"])
     elif "Swin" in method:
         model = models.swin_t(weights=None)
         model.head = nn.Linear(model.head.in_features, num_classes)
     elif "EfficientFormer" in method:
-        model = create_model("efficientformer_l3", pretrained=False, num_classes=num_classes)
+        model = create_model("efficientformer_l3",
+                             pretrained=False, num_classes=num_classes)
     elif "ViT" in method:
-        model = create_model("vit_base_patch16_224", pretrained=False, num_classes=num_classes)
+        model = create_model("vit_base_patch16_224",
+                             pretrained=False, num_classes=num_classes)
     else:
         raise ValueError("Unknown model")
 
@@ -340,9 +381,11 @@ def load_deep_model(method: str, path: str):
     model.to(device).eval()
     return model, artifact
 
+
 @st.cache_resource(show_spinner=False)
 def load_classical_artifact(path: str):
     return joblib.load(path)
+
 
 # ============================
 # SIDEBAR & MAIN INTERFACE
@@ -376,9 +419,11 @@ with st.sidebar:
     st.dataframe(
         leaderboard_df.style
         .format({"Accuracy": "{:.2f}%"})
-        .set_properties(**{"text-align": "left", "font-size": "14px"}) # pyright: ignore[reportArgumentType]
+        # pyright: ignore[reportArgumentType]
+        .set_properties(**{"text-align": "left", "font-size": "14px"})
         .set_table_styles([
-            {"selector": "th", "props": [("font-weight", "bold"), ("text-align", "left")]},
+            {"selector": "th", "props": [
+                ("font-weight", "bold"), ("text-align", "left")]},
             {"selector": "td", "props": [("padding", "8px")]},
         ]),
         use_container_width=True,
@@ -396,7 +441,8 @@ if uploaded:
     img_col1, img_col2 = st.columns(2)
 
     with img_col1:
-        st.image(image_pil, caption="Uploaded MRI Scan", use_container_width=True)
+        st.image(image_pil, caption="Uploaded MRI Scan",
+                 use_container_width=True)
 
     with img_col2:
         heatmap_placeholder = st.empty()
@@ -421,18 +467,23 @@ if uploaded:
                         feat = scaler.transform(feat.reshape(1, -1))
                     model = artifact["model"]
                     probs = model.predict_proba(feat)[0]
-                    class_names = artifact.get("class_names", ["Non-Demented", "Mild", "Moderate", "Very Mild"])
+                    class_names = artifact.get(
+                        "class_names", ["Non-Demented", "Mild", "Moderate", "Very Mild"])
                     overlaid = None
                 else:
                     model, artifact = load_deep_model(method, path)
                     transform = build_transform(artifact)
-                    x = transform(image_pil).unsqueeze(0).to(device) # pyright: ignore[reportAttributeAccessIssue]
+                    # pyright: ignore[reportAttributeAccessIssue]
+                    x = transform(image_pil).unsqueeze(0).to(device)
                     with torch.no_grad():
                         logits = model(x)
                         probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
-                    class_names = artifact.get("class_names", [f"Class {i}" for i in range(len(probs))])
-                    cam = generate_heatmap(model, x, method, class_idx=np.argmax(probs))
-                    overlaid = overlay_heatmap(image_np, cam) if cam is not None else None
+                    class_names = artifact.get(
+                        "class_names", [f"Class {i}" for i in range(len(probs))])
+                    cam = generate_heatmap(
+                        model, x, method, class_idx=np.argmax(probs))
+                    overlaid = overlay_heatmap(
+                        image_np, cam) if cam is not None else None
 
                 pred_label = class_names[np.argmax(probs)]
                 st.session_state.update({
@@ -452,12 +503,15 @@ if uploaded:
                     caption="Model Explanation Heatmap (Grad-CAM)",
                     use_container_width=True
                 )
-                st.caption("Red/orange areas indicate regions most influential to the model's prediction.")
+                st.caption(
+                    "Red/orange areas indicate regions most influential to the model's prediction.")
             else:
                 if st.session_state.get('is_classical'):
-                    heatmap_placeholder.info("ℹ️ Classical models do not support visual explanation heatmaps.")
+                    heatmap_placeholder.info(
+                        "ℹ️ Classical models do not support visual explanation heatmaps.")
                 else:
-                    heatmap_placeholder.warning("⚠️ Heatmap generation failed for this model. Prediction is still valid.")
+                    heatmap_placeholder.warning(
+                        "⚠️ Heatmap generation failed for this model. Prediction is still valid.")
 
         # Probability results
         prob_df = pd.DataFrame({
@@ -471,7 +525,8 @@ if uploaded:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("⚫ Prediction")
             st.metric("Predicted Stage", st.session_state['pred_label'])
-            st.metric("Confidence", f"{max(st.session_state['probs']) * 100:.2f}%")
+            st.metric("Confidence",
+                      f"{max(st.session_state['probs']) * 100:.2f}%")
             st.subheader("Top 3 Probabilities")
             for i in range(min(3, len(prob_df))):
                 row = prob_df.iloc[i]
@@ -481,7 +536,8 @@ if uploaded:
         with col2:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("⚪ Probability Distribution")
-            chart = st.radio("Chart Type", ["Bar", "Pie", "Donut"], horizontal=True)
+            chart = st.radio(
+                "Chart Type", ["Bar", "Pie", "Donut"], horizontal=True)
             if chart == "Bar":
                 fig = px.bar(prob_df[::-1], x="Probability", y="Stage", orientation="h",
                              color_discrete_sequence=["#00D4B8"])
@@ -491,7 +547,8 @@ if uploaded:
             else:
                 fig = px.pie(prob_df, values="Probability", names="Stage", hole=0.4,
                              color_discrete_sequence=px.colors.sequential.Teal)
-            fig.update_layout(height=400, plot_bgcolor="#1A2332", paper_bgcolor="#1A2332", font_color="#FAFAFA")
+            fig.update_layout(height=400, plot_bgcolor="#1A2332",
+                              paper_bgcolor="#1A2332", font_color="#FAFAFA")
             st.plotly_chart(fig, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
