@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  alzheimer-dashboard:
+    image: krisnabmntr/alzheimer-dashboard:latest
+    container_name: alzheimer-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount the entire Dashboard folder
+      - ./:/app
+      # Mount model directories from parent
+      - ../processed_dataset:/dataset:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
