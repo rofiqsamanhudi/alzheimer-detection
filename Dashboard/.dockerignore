@@ -1,0 +1,20 @@
+# Docker ignore file for Alzheimer Dashboard
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+.git/
+.gitignore
+*.md
+!requirements.txt
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
