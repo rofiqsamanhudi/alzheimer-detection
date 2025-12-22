@@ -308,7 +308,7 @@ def generate_heatmap(model, x, method, class_idx=None):
         bwd_handle.remove()
 
 def overlay_heatmap(original_image: np.ndarray, cam: np.ndarray) -> np.ndarray:
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET) # pyright: ignore[reportArgumentType, reportCallIssue]
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
     h, w = original_image.shape[:2]
     heatmap = cv2.resize(heatmap, (w, h))
@@ -406,7 +406,7 @@ with st.sidebar:
     st.dataframe(
         leaderboard_df.style
         .format({"Accuracy": "{:.2f}%"})
-        .set_properties(**{"text-align": "left", "font-size": "14px"})
+        .set_properties(**{"text-align": "left", "font-size": "14px"}) # pyright: ignore[reportArgumentType]
         .set_table_styles([
             {"selector": "th", "props": [("font-weight", "bold"), ("text-align", "left")]},
             {"selector": "td", "props": [("padding", "8px")]},
@@ -455,7 +455,7 @@ if uploaded:
                 else:
                     model, artifact = load_deep_model(method)
                     transform = build_transform(artifact)
-                    x = transform(image_pil).unsqueeze(0).to(device)
+                    x = transform(image_pil).unsqueeze(0).to(device) # pyright: ignore[reportAttributeAccessIssue]
                     with torch.no_grad():
                         logits = model(x)
                         probs = torch.softmax(logits, dim=1)[0].cpu().numpy()

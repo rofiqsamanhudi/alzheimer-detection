@@ -13,6 +13,12 @@ plotly==6.1.0
 
 # ===== Streamlit =====
 streamlit==1.44.1
+gdown==5.2.0
+requests
+
+# ===== Deep Learning =====
+torch==2.5.1
+torchvision==0.20.1
 timm==1.0.22
 
 # ===== Classical ML =====
