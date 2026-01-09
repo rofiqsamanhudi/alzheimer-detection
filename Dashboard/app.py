@@ -4,8 +4,10 @@ import torch.nn as nn
 import numpy as np
 import joblib
 import pickle
+import io
 from PIL import Image
-from torchvision import transforms, models
+from torchvision import transforms
+import torchvision.models as tv_models
 from timm import create_model
 from copy import deepcopy
 import cv2
@@ -16,39 +18,44 @@ import pandas as pd
 from datetime import datetime
 import os
 import logging
+import gdown
 
 # ============================
 # CONFIGURATION AND LOGGING
 # ============================
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logging.info(f"Using device: {device}")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Cache folder untuk model dari Drive
+CACHE_DIR = "cached_models"
+os.makedirs(CACHE_DIR, exist_ok=True)
 
-MODEL_PATHS = {
-    "CNN - Scratch": os.path.join(BASE_DIR, "src", "CNN", "model", "cnn_scratch_best.pkl"),
-    "CNN - EfficientNet-B0": os.path.join(BASE_DIR, "src", "CNN", "model", "efficientnet_b0_full_finetune.pkl"),
-    "CNN - ResNet50 + LoRA": os.path.join(BASE_DIR, "src", "CNN", "model", "resnet50_lora_model.pkl"),
-    "Swin Transformer (Full FT)": os.path.join(BASE_DIR, "src", "Transformer", "model", "swin_finetune_streamlit.pkl"),
-    "EfficientFormer L3 (Full FT)": os.path.join(BASE_DIR, "src", "Transformer", "model", "efficientformer_full_finetune_streamlit.pkl"),
-    "ViT Base Patch16 (Head FT)": os.path.join(BASE_DIR, "src", "Transformer", "model", "vit_base_finetune_head_streamlit.pkl"),
-    "HOG + XGBOOST": os.path.join(BASE_DIR, "src", "classical", "model", "hog_xgb_model.pkl"),
-    "HU Moments + XGBOOST": os.path.join(BASE_DIR, "src", "classical", "model", "hu_xgb_model.pkl"),
-    "GIST + XGBOOST": os.path.join(BASE_DIR, "src", "classical", "model", "gist_xgb_model.pkl"),
+# Google Drive URLs
+MODEL_URLS = {
+    "CNN - Scratch": "https://drive.google.com/uc?id=1N5yq18OUalGSLbEW7XPhzMaTu7vs8D7W",
+    "CNN - EfficientNet-B0": "https://drive.google.com/uc?id=1TI5d5n9mhTIqKNEtXIFJgXe1wxWM0XDh",
+    "CNN - ResNet50 + LoRA": "https://drive.google.com/uc?id=1eQsshSDLS_QsGCEaBUuMyL6_ha8iIfia",
+    "Swin Transformer (Full FT)": "https://drive.google.com/uc?id=1c89Pi0ktnAlmgqmAAzVJRW8dYSzimsqC",
+    "EfficientFormer L3 (Full FT)": "https://drive.google.com/uc?id=1oqkw13vrZRu-UcPCDGI_2EOilXaD_2WS",
+    "ViT Base Patch16 (Head FT)": "https://drive.google.com/uc?id=1GM3cbCENTrgXJZUpAV_fNYc9tA14loOF",
+    "HOG + XGBOOST": "https://drive.google.com/uc?id=1UBz2iIeP0ejUVCRSGaEf0dhFb68GLx6z",
+    "HU Moments + XGBOOST": "https://drive.google.com/uc?id=1PvICmTAIyjsKof7asirynBFZEeuPcyKg",
+    "GIST + XGBOOST": "https://drive.google.com/uc?id=1mYjwhKJFG3gOX2Xbj3HfWXPc9gK6SkoN",
 }
 
 # Model Leaderboard Data (sorted by Accuracy descending)
 MODEL_LEADERBOARD = [
-    {"Model": "ViT Base Patch16 (Head FT)",     "Accuracy": 96.57},
-    {"Model": "CNN - ResNet50 + LoRA",          "Accuracy": 95.45},
-    {"Model": "Swin Transformer (Full FT)",     "Accuracy": 95.34},
-    {"Model": "CNN - Scratch",                  "Accuracy": 95.29},
-    {"Model": "CNN - EfficientNet-B0",          "Accuracy": 94.98},
-    {"Model": "EfficientFormer L3 (Full FT)",   "Accuracy": 93.14},
-    {"Model": "GIST + XGBOOST",                 "Accuracy": 92.93},
-    {"Model": "HOG + XGBOOST",                  "Accuracy": 88.79},
-    {"Model": "HU Moments + XGBOOST",           "Accuracy": 88.58},
+    {"Model": "ViT Base Patch16 (Head FT)", "Accuracy": 96.57},
+    {"Model": "CNN - ResNet50 + LoRA", "Accuracy": 95.45},
+    {"Model": "Swin Transformer (Full FT)", "Accuracy": 95.34},
+    {"Model": "CNN - Scratch", "Accuracy": 95.29},
+    {"Model": "CNN - EfficientNet-B0", "Accuracy": 94.98},
+    {"Model": "EfficientFormer L3 (Full FT)", "Accuracy": 93.14},
+    {"Model": "GIST + XGBOOST", "Accuracy": 92.93},
+    {"Model": "HOG + XGBOOST", "Accuracy": 88.79},
+    {"Model": "HU Moments + XGBOOST", "Accuracy": 88.58},
 ]
 
 SUPPORTED_FORMATS = ["jpg", "jpeg", "png"]
@@ -56,7 +63,8 @@ SUPPORTED_FORMATS = ["jpg", "jpeg", "png"]
 # ============================
 # PAGE CONFIG & DARK THEME
 # ============================
-st.set_page_config(page_title="Alzheimer Detection Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Alzheimer Detection Dashboard",
+                   layout="wide", initial_sidebar_state="expanded")
 
 st.markdown('''
 <style>
@@ -300,31 +308,51 @@ def generate_heatmap(model, x, method, class_idx=None):
         bwd_handle.remove()
 
 def overlay_heatmap(original_image: np.ndarray, cam: np.ndarray) -> np.ndarray:
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET) # pyright: ignore[reportArgumentType, reportCallIssue]
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET) # type: ignore
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+    h, w = original_image.shape[:2]
+    heatmap = cv2.resize(heatmap, (w, h))
     overlay = heatmap * 0.4 + original_image * 0.6
     return np.clip(overlay, 0, 255).astype(np.uint8)
 
 # ============================
-# MODEL LOADING
+# CPU UNPICKLER
+# ============================
+class CPUUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == 'torch.storage' and name == '_load_from_bytes':
+            return lambda b: torch.load(io.BytesIO(b), map_location='cpu')
+        else:
+            return super().find_class(module, name)
+
+# ============================
+# MODEL LOADING DARI GOOGLE DRIVE
 # ============================
 @st.cache_resource(show_spinner=False)
-def load_deep_model(method: str, path: str):
+def load_deep_model(method: str):
+    url = MODEL_URLS[method]
+    safe_name = method.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "_") + ".pkl"
+    path = os.path.join(CACHE_DIR, safe_name)
+    if not os.path.exists(path):
+        with st.spinner(f"Downloading model {method} dari Google Drive..."):
+            gdown.download(url, path, quiet=False)
     with open(path, "rb") as f:
-        artifact = pickle.load(f)
+        if torch.cuda.is_available():
+            artifact = pickle.load(f)
+        else:
+            artifact = CPUUnpickler(f).load()
     num_classes = artifact["num_classes"]
-
     if method == "CNN - Scratch":
         model = SimpleCNN(num_classes)
     elif method == "CNN - EfficientNet-B0":
-        model = models.efficientnet_b0(weights=None)
+        model = tv_models.efficientnet_b0(weights=None)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
     elif method == "CNN - ResNet50 + LoRA":
-        base = models.resnet50(weights=None)
+        base = tv_models.resnet50(weights=None)
         base.fc = nn.Linear(base.fc.in_features, num_classes)
         model = apply_lora(base, artifact["lora"]["r"], artifact["lora"]["alpha"])
     elif "Swin" in method:
-        model = models.swin_t(weights=None)
+        model = tv_models.swin_t(weights=None)
         model.head = nn.Linear(model.head.in_features, num_classes)
     elif "EfficientFormer" in method:
         model = create_model("efficientformer_l3", pretrained=False, num_classes=num_classes)
@@ -332,13 +360,18 @@ def load_deep_model(method: str, path: str):
         model = create_model("vit_base_patch16_224", pretrained=False, num_classes=num_classes)
     else:
         raise ValueError("Unknown model")
-
     model.load_state_dict(artifact["model_state_dict"])
     model.to(device).eval()
     return model, artifact
 
 @st.cache_resource(show_spinner=False)
-def load_classical_artifact(path: str):
+def load_classical_artifact(method: str):
+    url = MODEL_URLS[method]
+    safe_name = method.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "_") + ".pkl"
+    path = os.path.join(CACHE_DIR, safe_name)
+    if not os.path.exists(path):
+        with st.spinner(f"Downloading model {method} dari Google Drive..."):
+            gdown.download(url, path, quiet=False)
     return joblib.load(path)
 
 # ============================
@@ -349,7 +382,7 @@ with st.sidebar:
 
     uploaded = st.file_uploader("Upload MRI Scan", type=SUPPORTED_FORMATS)
 
-    method = st.selectbox("Select Model", options=list(MODEL_PATHS.keys()))
+    method = st.selectbox("Select Model", options=list(MODEL_URLS.keys()))
 
     analyze_btn = st.button(
         "🔍 Analyze Scan",
@@ -373,7 +406,7 @@ with st.sidebar:
     st.dataframe(
         leaderboard_df.style
         .format({"Accuracy": "{:.2f}%"})
-        .set_properties(**{"text-align": "left", "font-size": "14px"}) # pyright: ignore[reportArgumentType]
+        .set_properties(**{"text-align": "left", "font-size": "14px"}) # type: ignore
         .set_table_styles([
             {"selector": "th", "props": [("font-weight", "bold"), ("text-align", "left")]},
             {"selector": "td", "props": [("padding", "8px")]},
@@ -402,11 +435,10 @@ if uploaded:
         if analyze_btn:
             st.session_state.clear()
             with st.spinner("Analyzing image and generating explanation..."):
-                path = MODEL_PATHS[method]
                 is_classical = any(k in method for k in ["HOG", "HU", "GIST"])
 
                 if is_classical:
-                    artifact = load_classical_artifact(path)
+                    artifact = load_classical_artifact(method)
                     if "HOG" in method:
                         feat = extract_hog(image_np)
                     elif "HU" in method:
@@ -421,9 +453,9 @@ if uploaded:
                     class_names = artifact.get("class_names", ["Non-Demented", "Mild", "Moderate", "Very Mild"])
                     overlaid = None
                 else:
-                    model, artifact = load_deep_model(method, path)
+                    model, artifact = load_deep_model(method)
                     transform = build_transform(artifact)
-                    x = transform(image_pil).unsqueeze(0).to(device) # pyright: ignore[reportAttributeAccessIssue]
+                    x = transform(image_pil).unsqueeze(0).to(device) # type: ignore
                     with torch.no_grad():
                         logits = model(x)
                         probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
@@ -478,7 +510,8 @@ if uploaded:
         with col2:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("⚪ Probability Distribution")
-            chart = st.radio("Chart Type", ["Bar", "Pie", "Donut"], horizontal=True)
+            chart = st.radio(
+                "Chart Type", ["Bar", "Pie", "Donut"], horizontal=True)
             if chart == "Bar":
                 fig = px.bar(prob_df[::-1], x="Probability", y="Stage", orientation="h",
                              color_discrete_sequence=["#00D4B8"])
@@ -488,7 +521,8 @@ if uploaded:
             else:
                 fig = px.pie(prob_df, values="Probability", names="Stage", hole=0.4,
                              color_discrete_sequence=px.colors.sequential.Teal)
-            fig.update_layout(height=400, plot_bgcolor="#1A2332", paper_bgcolor="#1A2332", font_color="#FAFAFA")
+            fig.update_layout(height=400, plot_bgcolor="#1A2332",
+                              paper_bgcolor="#1A2332", font_color="#FAFAFA")
             st.plotly_chart(fig, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
