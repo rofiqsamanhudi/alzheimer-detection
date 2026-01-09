@@ -6,8 +6,7 @@ import joblib
 import pickle
 import io
 from PIL import Image
-from torchvision import transforms
-import torchvision.models as tv_models
+from torchvision import transforms, models
 from timm import create_model
 from copy import deepcopy
 import cv2
@@ -18,7 +17,6 @@ import pandas as pd
 from datetime import datetime
 import os
 import logging
-import gdown
 
 # ============================
 # CONFIGURATION AND LOGGING
